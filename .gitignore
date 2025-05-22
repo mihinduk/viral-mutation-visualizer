@@ -1,0 +1,27 @@
+# R specific files
+.Rhistory
+.Rdata
+.RData
+.Ruserdata
+*.Rcheck/
+
+# renv files (keep renv.lock but exclude the cache)
+renv/library/
+renv/python/
+renv/staging/
+
+# Output files from testing
+test_*.pdf
+test_*.png
+test_output.*
+
+# Temporary files
+*.tmp
+*~
+.DS_Store
+
+# Log files
+*.log
+
+# PowerPoint temp files
+~$*

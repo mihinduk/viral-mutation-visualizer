@@ -1,0 +1,54 @@
+Create an R script to visualize mutations from a SnpEff-annotated LoFreq TSV file, generating a genome visualization similar to the reference figure I've shared.
+
+Input:
+1. A TSV file with SnpEff-annotated LoFreq output containing columns:
+   CHROM, POS, ID, REF, ALT, QUAL, INFO, Total_Depth, Allele_Frequency, strand_bias, DP4,
+   EFFECT, PUTATIVE_IMPACT, GENE_NAME, GENE_ID, FEATURE_TYPE, FEATURE_ID, TRANSCRIPT_TYPE,
+   HGVSc, HGVSp, cDNA_POSITION_AND_LENGTH, CDS_POSITION_AND_LENGTH, PROTEIN_POSITION_AND_LENGTH, ERROR
+
+2. The accession number from the CHROM column will be used to fetch the GenBank file to extract:
+   - Gene positions
+   - 5' and 3' UTRs
+   - Coding and non-coding regions
+
+Requirements:
+1. Command-line interface with the following parameters:
+   - Input TSV file path
+   - Output image file path (PDF or PNG)
+   - Allele_Frequency cutoff (e.g., 0.05) to filter mutations
+   - Gene selection option: "all", "structural", "non-structural", or specific gene names (comma-separated)
+   - Optional: color scheme customization
+
+2. The visualization should:
+   - Show the complete viral genome layout with all genes displayed, organized under structural and non-structural protein bars
+   - Display all genes (C, prM, Env, NS1, NS2a, NS2b, NS3, NS4a, NS4b, NS5, etc.) regardless of whether they contain mapped mutations
+   - Display mutation positions as vertical lines colored by gene
+   - Include mutation labels for significant variants
+   - Highlight mutations above the specified frequency cutoff
+   - Only show mutations for the genes specified in the gene selection parameter
+   - Include a legend for mutation types
+
+3. Include detailed documentation:
+   - README with installation instructions
+   - Usage examples for different gene selection options
+   - Description of output visualization
+   - Dependencies and requirements
+
+Example usage:
+Rscript visualize_mutations.R 
+--input mutations.tsv 
+--output mutation_plot.pdf 
+--cutoff 0.05 
+--mutation-genes all
+
+Rscript visualize_mutations.R 
+--input mutations.tsv 
+--output mutation_plot.pdf 
+--cutoff 0.1 
+--mutation-genes NS3,NS5
+
+Rscript visualize_mutations.R 
+--input mutations.tsv 
+--output mutation_plot.pdf 
+--cutoff 0.1 
+--mutation-genes structural

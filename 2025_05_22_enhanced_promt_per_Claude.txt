@@ -1,0 +1,116 @@
+# R Script Development and Deployment Task
+
+## Development Environment - CRITICAL
+**Working on Dropbox with spaces in ALL paths**
+- ALWAYS quote file paths: `"~/Dropbox/Project Name/file.csv"`
+- Use `normalizePath()` for robust path handling  
+- Test all file operations with spaces in paths
+- This is non-negotiable - unquoted paths will fail
+- Examples:
+  - ✅ `read.csv("~/Dropbox/Analysis Results/mutations.tsv")`
+  - ✅ `file.exists("~/Dropbox/My Project/output.pdf")`
+  - ❌ `read.csv(~/Dropbox/Analysis Results/mutations.tsv)` # Will fail
+  - ❌ `file.exists(~/Dropbox/My Project/output.pdf)` # Will fail
+
+## Objective
+Create an R script to visualize mutations from a SnpEff-annotated LoFreq TSV file, then push to GitHub and iterate until working.
+
+## GitHub Setup Required
+- Repository: https://github.com/mihinduk/
+- Set up GitHub access automatically (generate and configure SSH keys or personal access token)
+- Create a new repository branch for this project or use existing repo structure
+- Push all code, documentation, and test files
+
+## Development Process
+**IMPORTANT**: Continue iterating and fixing errors automatically without asking for user input on each error. Only ask for feedback once you have a working output file generated.
+
+### Iteration Strategy:
+1. Write initial code
+2. Test execution
+3. If errors occur: analyze, fix, and retry automatically
+4. Continue this cycle until script successfully generates output
+5. Only then present results to user for evaluation
+
+## Technical Requirements
+
+### Input Data
+TSV file with SnpEff-annotated LoFreq output containing columns:
+- CHROM, POS, ID, REF, ALT, QUAL, INFO, Total_Depth, Allele_Frequency, strand_bias, DP4
+- EFFECT, PUTATIVE_IMPACT, GENE_NAME, GENE_ID, FEATURE_TYPE, FEATURE_ID, TRANSCRIPT_TYPE
+- HGVSc, HGVSp, cDNA_POSITION_AND_LENGTH, CDS_POSITION_AND_LENGTH, PROTEIN_POSITION_AND_LENGTH, ERROR
+
+### Functionality
+1. **Command-line interface** with parameters:
+   ```bash
+   Rscript visualize_mutations.R 
+   --input mutations.tsv 
+   --output mutation_plot.pdf 
+   --cutoff 0.05 
+   --mutation-genes all
+   
+   Rscript visualize_mutations.R 
+   --input mutations.tsv 
+   --output mutation_plot.pdf 
+   --cutoff 0.1 
+   --mutation-genes NS3,NS5
+   
+   Rscript visualize_mutations.R 
+   --input mutations.tsv 
+   --output mutation_plot.pdf 
+   --cutoff 0.1 
+   --mutation-genes structural
+   ```
+
+2. **Automatic GenBank fetching**: Use CHROM column accession number to retrieve GenBank file and extract:
+   - Gene positions
+   - 5' and 3' UTRs  
+   - Coding and non-coding regions
+
+3. **Visualization requirements**:
+   - Complete viral genome layout with all genes displayed
+   - Organize genes under structural and non-structural protein bars
+   - Display all genes (C, prM, Env, NS1, NS2a, NS2b, NS3, NS4a, NS4b, NS5, etc.) regardless of mutations
+   - Show mutation positions as vertical lines colored by gene
+   - Include mutation labels for significant variants
+   - Highlight mutations above specified frequency cutoff
+   - Filter mutations by gene selection parameter
+   - Include legend for mutation types
+
+4. **Gene selection options**:
+   - "all": show all genes
+   - "structural": show only structural proteins
+   - "non-structural": show only non-structural proteins  
+   - Specific gene names: comma-separated list
+
+5. **Output formats**: Support PDF and PNG
+
+## Deliverables
+1. **Main R script** (`visualize_mutations.R`)
+2. **README.md** with:
+   - Installation instructions
+   - Usage examples
+   - Output description
+   - Dependencies list
+3. **Test data** (sample TSV file if possible)
+4. **Working output file** from successful test run
+
+## Error Handling Strategy
+- Implement robust error handling for common issues:
+  - Missing dependencies
+  - Network issues for GenBank retrieval
+  - Malformed input files
+  - Invalid gene names
+  - File I/O problems (especially path quoting issues)
+- Automatically attempt fixes for dependency issues
+- Provide informative error messages
+- Create fallback options where possible
+- **Always check that file paths are properly quoted before file operations**
+
+## Success Criteria
+- Script runs without user intervention
+- Generates output file successfully
+- Code is pushed to GitHub repository
+- Documentation is complete and clear
+- Ready for user evaluation and feedback
+
+**Remember**: Fix all errors automatically and continue development until you have a working output file to show the user.

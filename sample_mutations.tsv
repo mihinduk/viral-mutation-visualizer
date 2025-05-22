@@ -1,0 +1,19 @@
+CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	Total_Depth	Allele_Frequency	strand_bias	DP4	EFFECT	PUTATIVE_IMPACT	GENE_NAME	GENE_ID	FEATURE_TYPE	FEATURE_ID	TRANSCRIPT_TYPE	HGVSc	HGVSp	cDNA_POSITION_AND_LENGTH	CDS_POSITION_AND_LENGTH	PROTEIN_POSITION_AND_LENGTH	ERROR
+NC_009942.1	234	.	A	G	85.5	PASS	DP=156;AF=0.15	156	0.15	0.02	89,67,12,8	missense_variant	MODERATE	C	gene_capsid	transcript	transcript_capsid	protein_coding	c.138A>G	p.Lys46Glu	138/369	138/369	46/123	
+NC_009942.1	567	.	C	T	92.3	PASS	DP=198;AF=0.08	198	0.08	0.01	105,93,16,4	synonymous_variant	LOW	prM	gene_premembrane	transcript	transcript_premembrane	protein_coding	c.102C>T	p.Ser34Ser	102/501	102/501	34/167	
+NC_009942.1	1234	.	G	A	125.7	PASS	DP=245;AF=0.25	245	0.25	0.03	140,105,61,49	missense_variant	MODERATE	Env	gene_envelope	transcript	transcript_envelope	protein_coding	c.268G>A	p.Val90Ile	268/1503	268/1503	90/501	
+NC_009942.1	1456	.	T	C	78.9	PASS	DP=189;AF=0.12	189	0.12	0.02	98,91,13,10	missense_variant	MODERATE	Env	gene_envelope	transcript	transcript_envelope	protein_coding	c.490T>C	p.Leu164Pro	490/1503	490/1503	164/501	
+NC_009942.1	2789	.	A	T	156.2	PASS	DP=312;AF=0.45	312	0.45	0.04	180,132,95,85	missense_variant	MODERATE	NS1	gene_ns1	transcript	transcript_ns1	protein_coding	c.320A>T	p.Asn107Ile	320/1056	320/1056	107/352	
+NC_009942.1	3245	.	C	G	89.4	PASS	DP=167;AF=0.18	167	0.18	0.02	85,82,18,12	missense_variant	MODERATE	NS1	gene_ns1	transcript	transcript_ns1	protein_coding	c.776C>G	p.Pro259Arg	776/1056	776/1056	259/352	
+NC_009942.1	3678	.	G	C	201.8	PASS	DP=387;AF=0.62	387	0.62	0.05	195,192,124,118	missense_variant	MODERATE	NS2a	gene_ns2a	transcript	transcript_ns2a	protein_coding	c.153G>C	p.Glu51Asp	153/693	153/693	51/231	
+NC_009942.1	4123	.	T	A	67.3	PASS	DP=134;AF=0.06	134	0.06	0.01	72,62,4,4	synonymous_variant	LOW	NS2b	gene_ns2b	transcript	transcript_ns2b	protein_coding	c.132T>A	p.Ala44Ala	132/393	132/393	44/131	
+NC_009942.1	5234	.	A	G	178.6	PASS	DP=298;AF=0.55	298	0.55	0.06	165,133,89,76	missense_variant	MODERATE	NS3	gene_ns3	transcript	transcript_ns3	protein_coding	c.623A>G	p.Asp208Gly	623/1857	623/1857	208/619	
+NC_009942.1	5567	.	C	T	143.2	PASS	DP=267;AF=0.33	267	0.33	0.03	145,122,56,44	missense_variant	MODERATE	NS3	gene_ns3	transcript	transcript_ns3	protein_coding	c.956C>T	p.Arg319Cys	956/1857	956/1857	319/619	
+NC_009942.1	6123	.	G	A	234.5	PASS	DP=456;AF=0.72	456	0.72	0.07	235,221,165,158	missense_variant	MODERATE	NS3	gene_ns3	transcript	transcript_ns3	protein_coding	c.1512G>A	p.Gly504Ser	1512/1857	1512/1857	504/619	
+NC_009942.1	6789	.	T	G	87.1	PASS	DP=178;AF=0.14	178	0.14	0.02	95,83,13,12	missense_variant	MODERATE	NS4a	gene_ns4a	transcript	transcript_ns4a	protein_coding	c.321T>G	p.Ile107Met	321/447	321/447	107/149	
+NC_009942.1	7234	.	A	C	198.3	PASS	DP=345;AF=0.38	345	0.38	0.04	189,156,78,67	missense_variant	MODERATE	NS4b	gene_ns4b	transcript	transcript_ns4b	protein_coding	c.519A>C	p.Lys173Asn	519/756	519/756	173/252	
+NC_009942.1	8123	.	C	A	156.7	PASS	DP=289;AF=0.29	289	0.29	0.03	158,131,51,39	missense_variant	MODERATE	NS5	gene_ns5	transcript	transcript_ns5	protein_coding	c.452C>A	p.Pro151His	452/2724	452/2724	151/908	
+NC_009942.1	8567	.	G	T	267.8	PASS	DP=498;AF=0.68	498	0.68	0.08	276,222,189,176	missense_variant	MODERATE	NS5	gene_ns5	transcript	transcript_ns5	protein_coding	c.896G>T	p.Gly299Val	896/2724	896/2724	299/908	
+NC_009942.1	9234	.	T	C	124.5	PASS	DP=234;AF=0.21	234	0.21	0.02	125,109,28,22	synonymous_variant	LOW	NS5	gene_ns5	transcript	transcript_ns5	protein_coding	c.1563T>C	p.Phe521Phe	1563/2724	1563/2724	521/908	
+NC_009942.1	9789	.	A	G	189.4	PASS	DP=356;AF=0.42	356	0.42	0.05	195,161,89,76	missense_variant	MODERATE	NS5	gene_ns5	transcript	transcript_ns5	protein_coding	c.2118A>G	p.Lys706Glu	2118/2724	2118/2724	706/908	
+NC_009942.1	10123	.	C	G	78.6	PASS	DP=145;AF=0.09	145	0.09	0.01	79,66,7,6	missense_variant	MODERATE	NS5	gene_ns5	transcript	transcript_ns5	protein_coding	c.2452C>G	p.Ala818Gly	2452/2724	2452/2724	818/908	
