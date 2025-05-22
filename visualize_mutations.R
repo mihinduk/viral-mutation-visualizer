@@ -450,6 +450,7 @@ ORIGIN
       stringsAsFactors = FALSE
     )
     genome_length <- 11000
+    definition <- "West Nile virus, complete genome"
   }
   
   # Create a lookup table for WNV genes to categorize them as structural or non-structural

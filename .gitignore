@@ -14,6 +14,8 @@ renv/staging/
 test_*.pdf
 test_*.png
 test_output.*
+improved_*.pdf
+my_mutations.*
 
 # Temporary files
 *.tmp
