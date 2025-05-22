@@ -279,6 +279,7 @@ ORIGIN
   gene_name <- NULL
   product_name <- NULL
   genome_length <- NULL
+  definition <- NULL
   
   for (line in gb_content) {
     if (grepl("^LOCUS", line)) {
@@ -288,6 +289,21 @@ ORIGIN
         if (grepl("^[0-9]+$", parts[i])) {
           genome_length <- as.numeric(parts[i])
           break
+        }
+      }
+    }
+    
+    if (grepl("^DEFINITION", line)) {
+      # Extract definition line (organism description)
+      definition <- gsub("^DEFINITION\\s+", "", line)
+      # Handle continuation lines for definition
+      next_line_idx <- which(gb_content == line) + 1
+      if (next_line_idx <= length(gb_content)) {
+        while (next_line_idx <= length(gb_content) && 
+               grepl("^\\s{12}", gb_content[next_line_idx]) && 
+               !grepl("^ACCESSION|^VERSION|^KEYWORDS", gb_content[next_line_idx])) {
+          definition <- paste(definition, trimws(gb_content[next_line_idx]))
+          next_line_idx <- next_line_idx + 1
         }
       }
     }
@@ -503,7 +519,8 @@ ORIGIN
   return(list(
     genes = genes_data,
     utrs = utr_data,
-    genome_length = genome_length
+    genome_length = genome_length,
+    definition = ifelse(is.null(definition), "West Nile virus, complete genome", definition)
   ))
 }
 
@@ -723,7 +740,7 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
               color = "black", fill = "grey80") +
     geom_text(data = utrs_for_plot, 
               aes(x = (start + end)/2, y = 0.6, label = region), 
-              size = 3) +
+              size = 4) +
     
     # Add high-level category regions (structural vs non-structural)
     geom_rect(data = category_regions,
@@ -731,7 +748,7 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
               color = "black", fill = NA) +
     geom_text(data = category_regions,
               aes(x = (start + end)/2, y = y + 0.22, label = category),
-              size = 4) +
+              size = 5, fontface = "bold") +
               
     # Create a background region showing the full genome length
     geom_rect(aes(xmin = 1, xmax = genome_features$genome_length, ymin = 0.45, ymax = 0.55),
@@ -743,7 +760,7 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
               color = "black") +
     geom_text(data = genes_for_plot,
               aes(x = (start + end)/2, y = y, label = gene),
-              size = 3) +
+              size = 4, fontface = "bold") +
               
     # Add structural/non-structural protein lengths
     geom_text(data = data.frame(
@@ -754,7 +771,7 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
                 paste0("(", max(non_str_genes$end) - min(non_str_genes$start) + 1, "nt/", 
                       ceiling((max(non_str_genes$end) - min(non_str_genes$start) + 1)/3), "aa)")
       )
-    ), aes(x = x, y = y, label = label), size = 3) +
+    ), aes(x = x, y = y, label = label), size = 4) +
               
     # Add a scale bar at the bottom
     scale_x_continuous(name = "Genome position (nt)", 
@@ -827,11 +844,18 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   # Combine plots
   p_combined <- p_genome / p_mutations + plot_layout(heights = c(1, 1.5))
   
-  # Add title
+  # Add title with definition
+  accession <- unique(mutations$CHROM)[1]
+  definition <- genome_features$definition
+  # Truncate definition if too long (keep first 80 characters)
+  if (nchar(definition) > 80) {
+    definition <- paste0(substr(definition, 1, 77), "...")
+  }
+  
   final_plot <- p_combined + 
     plot_annotation(
-      title = paste0("Mutations in ", unique(mutations$CHROM)[1], " (cutoff: ", cutoff*100, "%)"),
-      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+      title = paste0("Mutations in ", accession, " - ", definition, " (cutoff: ", cutoff*100, "%)"),
+      theme = theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
     )
   
   return(final_plot)
