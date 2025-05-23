@@ -653,22 +653,22 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   gene_colors <- setNames(color_values, gene_names)
   
   # Prepare data for plotting
-  # 1. Genome layout with gene regions
+  # 1. Genome layout with gene regions - spread out vertically
   genes_for_plot <- genome_features$genes %>%
-    mutate(y = ifelse(category == "structural", 0.8, 0.2))
+    mutate(y = ifelse(category == "structural", 1.0, -0.1))
   
   # 2. High-level structural vs non-structural regions
   category_regions <- data.frame(
     category = c("Structural proteins", "Non-structural proteins"),
     start = c(str_range[1], non_str_range[1]),
     end = c(str_range[2], non_str_range[2]),
-    y = c(0.8, 0.2),
+    y = c(1.0, -0.1),
     stringsAsFactors = FALSE
   )
   
-  # 3. UTR regions
+  # 3. UTR regions - center between the protein regions
   utrs_for_plot <- genome_features$utrs %>%
-    mutate(y = 0.5)
+    mutate(y = 0.45)
   
   # 4. Mutations
   if (nrow(filtered_mutations) > 0) {
@@ -737,10 +737,10 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   p_genome <- ggplot() +
     # Add UTR regions
     geom_rect(data = utrs_for_plot, 
-              aes(xmin = start, xmax = end, ymin = 0.45, ymax = 0.55, fill = region),
+              aes(xmin = start, xmax = end, ymin = y - 0.05, ymax = y + 0.05, fill = region),
               color = "black", fill = "grey80") +
     geom_text(data = utrs_for_plot, 
-              aes(x = (start + end)/2, y = 0.6, label = region), 
+              aes(x = (start + end)/2, y = y + 0.15, label = region), 
               size = 4) +
     
     # Add high-level category regions (structural vs non-structural)
@@ -751,8 +751,8 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
               aes(x = (start + end)/2, y = y + 0.22, label = category),
               size = 5, fontface = "bold") +
               
-    # Create a background region showing the full genome length
-    geom_rect(aes(xmin = 1, xmax = genome_features$genome_length, ymin = 0.45, ymax = 0.55),
+    # Create a background region showing the full genome length  
+    geom_rect(aes(xmin = 1, xmax = genome_features$genome_length, ymin = 0.4, ymax = 0.5),
               fill = NA, color = "black") +
               
     # Add gene regions
@@ -766,7 +766,7 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
     # Add structural/non-structural protein lengths
     geom_text(data = data.frame(
       x = c((str_range[1] + str_range[2])/2, (non_str_range[1] + non_str_range[2])/2),
-      y = c(0.8 - 0.18, 0.2 - 0.18),
+      y = c(1.0 - 0.2, -0.1 - 0.2),
       label = c(paste0("(", max(str_genes$end) - min(str_genes$start) + 1, "nt/", 
                       ceiling((max(str_genes$end) - min(str_genes$start) + 1)/3), "aa)"),
                 paste0("(", max(non_str_genes$end) - min(non_str_genes$start) + 1, "nt/", 
@@ -778,7 +778,7 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
     scale_x_continuous(name = "Genome position (nt)", 
                        breaks = seq(0, ceiling(genome_features$genome_length/1000)*1000, by = 1000),
                        labels = function(x) format(x, big.mark = ",")) +
-    scale_y_continuous(name = NULL, limits = c(-2, 1.2)) +
+    scale_y_continuous(name = NULL, limits = c(-0.5, 1.4)) +
     scale_fill_manual(values = c(gene_colors, "5'UTR" = "grey80", "3'UTR" = "grey80",
                                 "Structural proteins" = NA, "Non-structural proteins" = NA)) +
     theme_minimal() +
@@ -842,8 +842,8 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
       legend.position = "right"
     )
   
-  # Combine plots
-  p_combined <- p_genome / p_mutations + plot_layout(heights = c(1, 1.5))
+  # Combine plots - give more space to genome diagram
+  p_combined <- p_genome / p_mutations + plot_layout(heights = c(1.8, 1.2))
   
   # Add title with definition
   accession <- unique(mutations$CHROM)[1]
