@@ -2,6 +2,11 @@
 
 This tool creates visualizations of viral genome mutations from SnpEff-annotated LoFreq output files. It displays mutations in the context of the viral genome structure, highlighting gene boundaries, coding regions, and mutation locations.
 
+## Available Versions
+
+- **visualize_mutations.R**: Original version optimized for West Nile virus (WNV) with hardcoded genome structure
+- **visualize_mutations_dynamic.R**: Dynamic version that fetches genome information from NCBI for any virus
+
 ## Features
 
 - Automatic retrieval of genome information from GenBank using the accession number
@@ -61,7 +66,11 @@ BiocManager::install(c("rentrez", "seqinr"))
 The script is run from the command line with several options:
 
 ```
+# For West Nile virus (fast, no internet required)
 Rscript visualize_mutations.R --input <input-file> --output <output-file> [options]
+
+# For any virus (requires internet connection for NCBI lookup)
+Rscript visualize_mutations_dynamic.R --input <input-file> --output <output-file> [options]
 ```
 
 ### Required Arguments
