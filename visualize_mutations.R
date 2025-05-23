@@ -652,23 +652,29 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   
   gene_colors <- setNames(color_values, gene_names)
   
-  # Prepare data for plotting
-  # 1. Genome layout with gene regions - spread out vertically
-  genes_for_plot <- genome_features$genes %>%
-    mutate(y = ifelse(category == "structural", 1.0, -0.1))
+  # Prepare data for plotting - linear genome design
+  # 1. Single genome line with gene markers
+  genome_line_y <- 0.5
   
-  # 2. High-level structural vs non-structural regions
+  # 2. Genes positioned on the genome line
+  genes_for_plot <- genome_features$genes %>%
+    mutate(
+      y = genome_line_y,
+      x_center = (start + end) / 2
+    )
+  
+  # 3. High-level structural vs non-structural regions (as colored sections of the genome line)
   category_regions <- data.frame(
     category = c("Structural proteins", "Non-structural proteins"),
     start = c(str_range[1], non_str_range[1]),
     end = c(str_range[2], non_str_range[2]),
-    y = c(1.0, -0.1),
+    y = rep(genome_line_y, 2),
     stringsAsFactors = FALSE
   )
   
-  # 3. UTR regions - center between the protein regions
+  # 4. UTR regions
   utrs_for_plot <- genome_features$utrs %>%
-    mutate(y = 0.45)
+    mutate(y = genome_line_y)
   
   # 4. Mutations
   if (nrow(filtered_mutations) > 0) {
@@ -732,55 +738,59 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
     )
   }
   
-  # Create the genome layout plot
-  # 1. Base layout with UTRs
+  # Create the linear genome layout plot
   p_genome <- ggplot() +
-    # Add UTR regions
-    geom_rect(data = utrs_for_plot, 
-              aes(xmin = start, xmax = end, ymin = y - 0.05, ymax = y + 0.05, fill = region),
-              color = "black", fill = "grey80") +
+    # Main genome line
+    geom_segment(aes(x = 1, xend = genome_features$genome_length, 
+                     y = genome_line_y, yend = genome_line_y),
+                 linewidth = 3, color = "black") +
+    
+    # UTR regions as thicker segments
+    geom_segment(data = utrs_for_plot,
+                 aes(x = start, xend = end, y = y, yend = y),
+                 linewidth = 6, color = "grey60") +
     geom_text(data = utrs_for_plot, 
               aes(x = (start + end)/2, y = y + 0.15, label = region), 
-              size = 4) +
+              size = 3.5) +
     
-    # Add high-level category regions (structural vs non-structural)
-    geom_rect(data = category_regions,
-              aes(xmin = start, xmax = end, ymin = y - 0.12, ymax = y + 0.12, fill = category),
-              color = "black", fill = NA) +
+    # Structural and non-structural protein regions as colored thick segments
+    geom_segment(data = category_regions,
+                 aes(x = start, xend = end, y = y, yend = y, color = category),
+                 linewidth = 8, alpha = 0.7) +
     geom_text(data = category_regions,
-              aes(x = (start + end)/2, y = y + 0.22, label = category),
-              size = 5, fontface = "bold") +
-              
-    # Create a background region showing the full genome length  
-    geom_rect(aes(xmin = 1, xmax = genome_features$genome_length, ymin = 0.4, ymax = 0.5),
-              fill = NA, color = "black") +
-              
-    # Add gene regions
-    geom_rect(data = genes_for_plot,
-              aes(xmin = start, xmax = end, ymin = y - 0.08, ymax = y + 0.08, fill = gene),
-              color = "black") +
-    geom_text(data = genes_for_plot,
-              aes(x = (start + end)/2, y = y, label = gene),
+              aes(x = (start + end)/2, y = y + 0.25, label = category),
               size = 4, fontface = "bold") +
+    
+    # Gene markers as vertical ticks on the genome line
+    geom_segment(data = genes_for_plot,
+                 aes(x = x_center, xend = x_center, 
+                     y = y - 0.08, yend = y + 0.08, color = gene),
+                 linewidth = 2) +
+    
+    # Gene labels
+    geom_text(data = genes_for_plot,
+              aes(x = x_center, y = y - 0.2, label = gene, color = gene),
+              size = 3.5, fontface = "bold", angle = 45, hjust = 1) +
               
-    # Add structural/non-structural protein lengths
+    # Length annotations
     geom_text(data = data.frame(
       x = c((str_range[1] + str_range[2])/2, (non_str_range[1] + non_str_range[2])/2),
-      y = c(1.0 - 0.2, -0.1 - 0.2),
+      y = c(genome_line_y + 0.4, genome_line_y + 0.4),
       label = c(paste0("(", max(str_genes$end) - min(str_genes$start) + 1, "nt/", 
                       ceiling((max(str_genes$end) - min(str_genes$start) + 1)/3), "aa)"),
                 paste0("(", max(non_str_genes$end) - min(non_str_genes$start) + 1, "nt/", 
                       ceiling((max(non_str_genes$end) - min(non_str_genes$start) + 1)/3), "aa)")
       )
-    ), aes(x = x, y = y, label = label), size = 4) +
+    ), aes(x = x, y = y, label = label), size = 3) +
               
-    # Add a scale bar at the bottom
+    # Scale and formatting
     scale_x_continuous(name = "Genome position (nt)", 
                        breaks = seq(0, ceiling(genome_features$genome_length/1000)*1000, by = 1000),
                        labels = function(x) format(x, big.mark = ",")) +
-    scale_y_continuous(name = NULL, limits = c(-0.5, 1.4)) +
-    scale_fill_manual(values = c(gene_colors, "5'UTR" = "grey80", "3'UTR" = "grey80",
-                                "Structural proteins" = NA, "Non-structural proteins" = NA)) +
+    scale_y_continuous(name = NULL, limits = c(0, 1.2)) +
+    scale_color_manual(values = c(gene_colors, 
+                                 "Structural proteins" = "#2166ac", 
+                                 "Non-structural proteins" = "#762a83")) +
     theme_minimal() +
     theme(
       axis.text.y = element_blank(),
@@ -789,29 +799,41 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
       legend.position = "none"
     )
   
-  # 2. Create mutation plot
-  p_mutations <- ggplot() +
-    # Add gene regions as background
-    geom_rect(data = genes_for_plot,
-              aes(xmin = start, xmax = end, ymin = -1.9, ymax = -0.1, fill = gene),
-              alpha = 0.1)
+  # 2. Create mutation plot with connecting lines to genome
+  mutation_y_start <- -0.2  # Start mutations just below genome line
+  mutation_y_end <- -1.8    # End of mutation frequency bars
   
-  # Only add mutation lines and labels if there are mutations
+  p_mutations <- ggplot() +
+    # Reference genome line at the top
+    geom_segment(aes(x = 1, xend = genome_features$genome_length, 
+                     y = 0, yend = 0),
+                 linewidth = 2, color = "grey40", alpha = 0.5)
+  
+  # Only add mutation elements if there are mutations
   if (nrow(mutations_for_plot) > 0) {
     p_mutations <- p_mutations +
-      # Add mutations as vertical lines
+      # Connecting lines from genome to mutations (colored by gene)
       geom_segment(data = mutations_for_plot,
-                  aes(x = POS, xend = POS, y = -1.9, yend = -0.1, color = GENE_NAME, 
-                      alpha = Allele_Frequency, linewidth = ifelse(highlight, 1.2, 0.8)),
-                  lineend = "round")
+                  aes(x = POS, xend = POS, y = 0, yend = mutation_y_start, color = GENE_NAME),
+                  linewidth = 0.8, alpha = 0.7) +
+      
+      # Mutation frequency bars
+      geom_segment(data = mutations_for_plot,
+                  aes(x = POS, xend = POS, 
+                      y = mutation_y_start, 
+                      yend = mutation_y_start - (Allele_Frequency * 1.4), 
+                      color = GENE_NAME,
+                      linewidth = ifelse(highlight, 1.2, 0.8)),
+                  lineend = "round", alpha = 0.8)
     
     # Only add labels if there are any non-NA labels
     if (nrow(mutations_for_plot %>% filter(!is.na(label))) > 0) {
       p_mutations <- p_mutations +
         # Add mutation labels
         geom_text_repel(data = mutations_for_plot %>% filter(!is.na(label)),
-                       aes(x = POS, y = -0.5, label = label, color = GENE_NAME),
-                       size = 3, box.padding = 0.5, segment.color = "grey50",
+                       aes(x = POS, y = mutation_y_start - (Allele_Frequency * 1.4) - 0.1, 
+                           label = label, color = GENE_NAME),
+                       size = 2.8, box.padding = 0.3, segment.color = "grey50",
                        min.segment.length = 0, max.overlaps = 30, direction = "y")
     }
   } else {
@@ -823,14 +845,24 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   }
   
   p_mutations <- p_mutations +
+    # Add frequency scale
+    annotate("text", x = genome_features$genome_length * 0.02, y = -0.4, 
+             label = "Allele\nFrequency", size = 3, hjust = 0) +
+    annotate("text", x = genome_features$genome_length * 0.02, y = -0.9, 
+             label = "50%", size = 2.5, hjust = 0) +
+    annotate("text", x = genome_features$genome_length * 0.02, y = -1.6, 
+             label = "100%", size = 2.5, hjust = 0) +
+    geom_segment(aes(x = genome_features$genome_length * 0.01, 
+                     xend = genome_features$genome_length * 0.01,
+                     y = -0.2, yend = -1.6), 
+                 color = "grey60", linewidth = 0.5) +
                    
     # Set scales
-    scale_x_continuous(name = NULL, 
+    scale_x_continuous(name = "Genome position (nt)", 
                       breaks = seq(0, ceiling(genome_features$genome_length/1000)*1000, by = 1000),
                       labels = function(x) format(x, big.mark = ",")) +
-    scale_y_continuous(name = NULL, limits = c(-2, 0)) +
+    scale_y_continuous(name = NULL, limits = c(-2, 0.2)) +
     scale_color_manual(values = gene_colors, name = "Gene") +
-    scale_alpha_continuous(range = c(0.5, 1), name = "Allele\nFrequency") +
     scale_linewidth_identity() +
     
     # Customize theme
@@ -842,8 +874,8 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
       legend.position = "right"
     )
   
-  # Combine plots - give more space to genome diagram
-  p_combined <- p_genome / p_mutations + plot_layout(heights = c(1.8, 1.2))
+  # Combine plots - balanced layout for linear design
+  p_combined <- p_genome / p_mutations + plot_layout(heights = c(1.2, 1.8))
   
   # Add title with definition
   accession <- unique(mutations$CHROM)[1]
