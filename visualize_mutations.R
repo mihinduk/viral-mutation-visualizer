@@ -1,17 +1,14 @@
 #!/usr/bin/env Rscript
 
 # -------------------------------------------------------------------------
-# visualize_mutations.R - Visualize mutations from a SnpEff-annotated LoFreq TSV file
-# 
-# This script creates a genome visualization showing mapped mutations on the viral genome
-# with support for filtering by gene regions and allele frequency.
+# visualize_mutations_v5.R - Non-synonymous mutations only with separate output table
 # -------------------------------------------------------------------------
 
 # Function to install and load required packages
 install_and_load_packages <- function() {
   # Define required packages
-  cran_packages <- c("optparse", "ggplot2", "dplyr", "readr", "stringr", 
-                     "patchwork", "ggrepel", "RColorBrewer")
+  cran_packages <- c("optparse", "ggplot2", "dplyr", "tidyr", "readr", "stringr", 
+                     "patchwork", "ggrepel", "RColorBrewer", "gridExtra", "grid", "cowplot")
   bioc_packages <- c("rentrez", "seqinr")
   
   # Install missing CRAN packages
@@ -60,12 +57,10 @@ option_list <- list(
               help="Genes to display mutations for: 'all', 'structural', 'non-structural', or specific gene names (comma-separated)"),
   make_option(c("--colors"), type="character", default=NULL, 
               help="Custom color scheme, comma-separated hex values [optional]"),
-  make_option(c("--width"), type="numeric", default=14, 
+  make_option(c("--width"), type="numeric", default=16, 
               help="Plot width in inches [default= %default]"),
-  make_option(c("--height"), type="numeric", default=8, 
+  make_option(c("--height"), type="numeric", default=10, 
               help="Plot height in inches [default= %default]"),
-  make_option(c("--highlight-freq"), type="numeric", default=0.5, 
-              help="Highlight mutations with frequency above this threshold [default= %default]"),
   make_option(c("--accession"), type="character", default=NULL, 
               help="Manually specify GenBank accession (overrides accession in CHROM column)")
 )
@@ -107,13 +102,13 @@ read_mutations <- function(file_path) {
     }
   }
   
-  # Handle Allele_Frequency (might be named differently)
+  # Handle Allele_Frequency
   if ("Allele_Frequency" %in% colnames(mutations)) {
     mutations$Allele_Frequency <- as.numeric(mutations$Allele_Frequency)
   } else if ("AF" %in% colnames(mutations)) {
     mutations$Allele_Frequency <- as.numeric(mutations$AF)
   } else {
-    # Try to extract from INFO field if it exists
+    # Try to extract from INFO field
     if ("INFO" %in% colnames(mutations)) {
       mutations$Allele_Frequency <- as.numeric(sapply(mutations$INFO, function(info) {
         af_match <- regexpr("AF=([0-9.]+)", info)
@@ -125,389 +120,43 @@ read_mutations <- function(file_path) {
         }
       }))
     } else {
-      stop("Could not find allele frequency information in the input file")
+      stop("Could not find allele frequency information")
     }
   }
   
   # Convert other numeric columns
   mutations$POS <- as.numeric(mutations$POS)
-  if ("Total_Depth" %in% colnames(mutations)) {
-    mutations$Total_Depth <- as.numeric(mutations$Total_Depth)
-  } else if ("DP" %in% colnames(mutations)) {
-    mutations$Total_Depth <- as.numeric(mutations$DP)
-  }
   
   # Extract protein positions if available
-  if ("PROTEIN_POSITION_AND_LENGTH" %in% colnames(mutations)) {
-    mutations$protein_pos <- as.numeric(str_extract(mutations$PROTEIN_POSITION_AND_LENGTH, "^\\d+"))
-  } else if ("HGVSp" %in% colnames(mutations)) {
-    # Try to extract from HGVSp (format like p.Ala123Val)
+  if ("HGVSp" %in% colnames(mutations)) {
     mutations$protein_pos <- as.numeric(str_extract(mutations$HGVSp, "(?<=p\\.[A-Za-z]{1,3})\\d+"))
   }
   
   return(mutations)
 }
 
-# Function to get GenBank file and extract gene positions
+# Function to get genome features
 get_genome_features <- function(accession) {
-  # Create a temp file for the GenBank file
-  gb_file <- tempfile(fileext = ".gb")
-  
-  # Download GenBank file with retry mechanism
-  cat("Fetching GenBank record for", accession, "...\n")
-  
-  # Try to fetch the record with retry mechanism
-  max_attempts <- 3
-  for (attempt in 1:max_attempts) {
-    tryCatch({
-      entrez_fetch(db="nucleotide", id=accession, rettype="gb", retmode="text", file=gb_file)
-      
-      # Verify file was created and has content
-      if (file.exists(gb_file) && file.size(gb_file) > 0) {
-        break  # Success
-      } else {
-        stop("Empty GenBank file downloaded")
-      }
-    }, error = function(e) {
-      if (attempt < max_attempts) {
-        cat("Attempt", attempt, "failed. Retrying...\n")
-        Sys.sleep(2)  # Wait 2 seconds before retry
-      } else {
-        cat("Error fetching GenBank record:", e$message, "\n")
-        cat("Using default WNV gene structure instead.\n")
-        
-        # Create default WNV gene structure
-        write("LOCUS       DEFAULT_WNV          11000 bp    RNA     linear   VRL 01-JAN-2025
-FEATURES             Location/Qualifiers
-     source          1..11000
-                     /organism=\"West Nile virus\"
-     CDS             97..465
-                     /gene=\"C\"
-                     /product=\"capsid protein\"
-     CDS             466..966
-                     /gene=\"prM\"
-                     /product=\"premembrane protein\"
-     CDS             967..2469
-                     /gene=\"Env\"
-                     /product=\"envelope protein E\"
-     CDS             2470..3525
-                     /gene=\"NS1\"
-                     /product=\"nonstructural protein 1\"
-     CDS             3526..4218
-                     /gene=\"NS2a\"
-                     /product=\"nonstructural protein 2A\"
-     CDS             4219..4611
-                     /gene=\"NS2b\"
-                     /product=\"nonstructural protein 2B\"
-     CDS             4612..6468
-                     /gene=\"NS3\"
-                     /product=\"nonstructural protein 3\"
-     CDS             6469..6915
-                     /gene=\"NS4a\"
-                     /product=\"nonstructural protein 4A\"
-     CDS             6916..7671
-                     /gene=\"NS4b\"
-                     /product=\"nonstructural protein 4B\"
-     CDS             7672..10395
-                     /gene=\"NS5\"
-                     /product=\"nonstructural protein 5\"
-ORIGIN
-        1 agtagttcgc ctgtgtgagc tgacaaactt agttagtgtt tgtgagctgc aaacttgcga
-       61 gagtctcccg gaaatagtgg gtgtttatct agaaacaaca attaatgtgg aaggcctcgt
-      121 cccctcggac cgcctgatcg ctgcgccacc tgctgtctct gcgaatcact gtgggaatcc
-      181 agcccggtgg ctgctctaat ggtcaccacg aatgcaacat acgacgctct tgtaaaactg
-      //", gb_file)
-      }
-    })
-  }
-  
-  # Verify the file exists and has content
-  if (!file.exists(gb_file) || file.size(gb_file) == 0) {
-    cat("GenBank file not created properly. Using default WNV gene structure.\n")
-    # Create default WNV gene structure
-    write("LOCUS       DEFAULT_WNV          11000 bp    RNA     linear   VRL 01-JAN-2025
-FEATURES             Location/Qualifiers
-     source          1..11000
-                     /organism=\"West Nile virus\"
-     CDS             97..465
-                     /gene=\"C\"
-                     /product=\"capsid protein\"
-     CDS             466..966
-                     /gene=\"prM\"
-                     /product=\"premembrane protein\"
-     CDS             967..2469
-                     /gene=\"Env\"
-                     /product=\"envelope protein E\"
-     CDS             2470..3525
-                     /gene=\"NS1\"
-                     /product=\"nonstructural protein 1\"
-     CDS             3526..4218
-                     /gene=\"NS2a\"
-                     /product=\"nonstructural protein 2A\"
-     CDS             4219..4611
-                     /gene=\"NS2b\"
-                     /product=\"nonstructural protein 2B\"
-     CDS             4612..6468
-                     /gene=\"NS3\"
-                     /product=\"nonstructural protein 3\"
-     CDS             6469..6915
-                     /gene=\"NS4a\"
-                     /product=\"nonstructural protein 4A\"
-     CDS             6916..7671
-                     /gene=\"NS4b\"
-                     /product=\"nonstructural protein 4B\"
-     CDS             7672..10395
-                     /gene=\"NS5\"
-                     /product=\"nonstructural protein 5\"
-ORIGIN
-        1 agtagttcgc ctgtgtgagc tgacaaactt agttagtgtt tgtgagctgc aaacttgcga
-       61 gagtctcccg gaaatagtgg gtgtttatct agaaacaaca attaatgtgg aaggcctcgt
-      121 cccctcggac cgcctgatcg ctgcgccacc tgctgtctct gcgaatcact gtgggaatcc
-      181 agcccggtgg ctgctctaat ggtcaccacg aatgcaacat acgacgctct tgtaaaactg
-      //", gb_file)
-  }
-  
-  # Read the GenBank file directly
-  gb_content <- readLines(gb_file)
-  
-  # Parse the GenBank file to get features
-  features <- list()
-  in_features <- FALSE
-  current_feature <- NULL
-  feature_type <- NULL
-  feature_location <- NULL
-  gene_name <- NULL
-  product_name <- NULL
-  genome_length <- NULL
-  definition <- NULL
-  
-  for (line in gb_content) {
-    if (grepl("^LOCUS", line)) {
-      # Extract genome length from LOCUS line
-      parts <- strsplit(line, "\\s+")[[1]]
-      for (i in 1:length(parts)) {
-        if (grepl("^[0-9]+$", parts[i])) {
-          genome_length <- as.numeric(parts[i])
-          break
-        }
-      }
-    }
-    
-    if (grepl("^DEFINITION", line)) {
-      # Extract definition line (organism description)
-      definition <- gsub("^DEFINITION\\s+", "", line)
-      # Handle continuation lines for definition
-      next_line_idx <- which(gb_content == line) + 1
-      if (next_line_idx <= length(gb_content)) {
-        while (next_line_idx <= length(gb_content) && 
-               grepl("^\\s{12}", gb_content[next_line_idx]) && 
-               !grepl("^ACCESSION|^VERSION|^KEYWORDS", gb_content[next_line_idx])) {
-          definition <- paste(definition, trimws(gb_content[next_line_idx]))
-          next_line_idx <- next_line_idx + 1
-        }
-      }
-    }
-    
-    if (grepl("^FEATURES", line)) {
-      in_features <- TRUE
-      next
-    }
-    
-    if (in_features) {
-      if (grepl("^\\s{5}[a-zA-Z]", line)) {
-        # Start of a new feature
-        if (!is.null(current_feature) && !is.null(feature_type) && feature_type == "CDS") {
-          # Save previous CDS feature
-          features[[length(features) + 1]] <- list(
-            type = feature_type,
-            location = feature_location,
-            gene = ifelse(is.null(gene_name), paste0("gene_", length(features) + 1), gene_name),
-            product = ifelse(is.null(product_name), ifelse(is.null(gene_name), paste0("gene_", length(features) + 1), gene_name), product_name)
-          )
-        }
-        
-        # Reset for new feature
-        current_feature <- line
-        feature_type <- trimws(strsplit(line, "\\s+")[[1]][1])
-        feature_location <- gsub("^\\s*[a-zA-Z]+\\s+(.*)", "\\1", line)
-        gene_name <- NULL
-        product_name <- NULL
-      } else if (grepl("^\\s{21}/gene=", line)) {
-        # Gene name
-        gene_name <- gsub("^\\s*\\/gene=\"(.*)\".*", "\\1", line)
-      } else if (grepl("^\\s{21}/product=", line)) {
-        # Product name
-        product_name <- gsub("^\\s*\\/product=\"(.*)\".*", "\\1", line)
-      } else if (grepl("^\\s{21}", line) && !is.null(current_feature)) {
-        # Continuation of a feature or qualification
-        if (grepl("^\\s{21}[0-9]", line) || grepl("^\\s{21}complement", line) || grepl("^\\s{21}join", line)) {
-          # Continuation of location
-          feature_location <- paste0(feature_location, gsub("^\\s*", "", line))
-        } else if (grepl("\\/gene=", line)) {
-          gene_name <- gsub("^\\s*\\/gene=\"(.*)\".*", "\\1", line)
-        } else if (grepl("\\/product=", line)) {
-          product_name <- gsub("^\\s*\\/product=\"(.*)\".*", "\\1", line)
-        }
-      }
-    }
-    
-    if (grepl("^ORIGIN", line)) {
-      in_features <- FALSE
-      # Save the last feature if it's a CDS
-      if (!is.null(current_feature) && !is.null(feature_type) && feature_type == "CDS") {
-        features[[length(features) + 1]] <- list(
-          type = feature_type,
-          location = feature_location,
-          gene = ifelse(is.null(gene_name), paste0("gene_", length(features) + 1), gene_name),
-          product = ifelse(is.null(product_name), ifelse(is.null(gene_name), paste0("gene_", length(features) + 1), gene_name), product_name)
-        )
-      }
-      break
-    }
-  }
-  
-  # Process features to extract gene coordinates
+  # Default WNV gene structure
   genes_data <- data.frame(
-    gene = character(),
-    start = numeric(),
-    end = numeric(),
-    product = character(),
-    strand = character(),
-    stringsAsFactors = FALSE
-  )
-  
-  if (length(features) > 0) {
-    for (i in 1:length(features)) {
-      if (features[[i]]$type == "CDS") {
-        loc <- features[[i]]$location
-        
-        # Determine strand
-        strand <- "+"
-        if (grepl("complement", loc)) {
-          strand <- "-"
-          loc <- gsub("complement\\((.*)\\)", "\\1", loc)
-        }
-        
-        # Extract coordinates
-        if (grepl("join", loc)) {
-          # Handle joined features
-          loc <- gsub("join\\((.*)\\)", "\\1", loc)
-          parts <- strsplit(loc, ",")[[1]]
-          starts <- numeric()
-          ends <- numeric()
-          
-          for (part in parts) {
-            coords <- as.numeric(strsplit(gsub("[^0-9]", " ", part), "\\s+")[[1]])
-            coords <- coords[coords > 0]
-            if (length(coords) >= 2) {
-              starts <- c(starts, coords[1])
-              ends <- c(ends, coords[2])
-            }
-          }
-          
-          start_pos <- min(starts)
-          end_pos <- max(ends)
-        } else {
-          # Handle simple features
-          coords <- as.numeric(strsplit(gsub("[^0-9]", " ", loc), "\\s+")[[1]])
-          coords <- coords[coords > 0]
-          if (length(coords) >= 2) {
-            start_pos <- coords[1]
-            end_pos <- coords[2]
-          } else {
-            next
-          }
-        }
-        
-        genes_data <- rbind(genes_data, data.frame(
-          gene = features[[i]]$gene,
-          start = start_pos,
-          end = end_pos,
-          product = features[[i]]$product,
-          strand = strand,
-          stringsAsFactors = FALSE
-        ))
-      }
-    }
-  }
-  
-  # Convert to numeric
-  genes_data$start <- as.numeric(genes_data$start)
-  genes_data$end <- as.numeric(genes_data$end)
-  
-  # If no genes were found, create default WNV gene structure
-  if (nrow(genes_data) == 0) {
-    cat("No gene features found in GenBank file. Using default WNV gene structure.\n")
-    genes_data <- data.frame(
-      gene = c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5"),
-      start = c(97, 466, 967, 2470, 3526, 4219, 4612, 6469, 6916, 7672),
-      end = c(465, 966, 2469, 3525, 4218, 4611, 6468, 6915, 7671, 10395),
-      product = c("capsid protein", "premembrane protein", "envelope protein E", 
-                  "nonstructural protein 1", "nonstructural protein 2A", "nonstructural protein 2B",
-                  "nonstructural protein 3", "nonstructural protein 4A", "nonstructural protein 4B", 
-                  "nonstructural protein 5"),
-      strand = rep("+", 10),
-      stringsAsFactors = FALSE
-    )
-    genome_length <- 11000
-    definition <- "West Nile virus, complete genome"
-  }
-  
-  # Create a lookup table for WNV genes to categorize them as structural or non-structural
-  gene_categories <- data.frame(
     gene = c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5"),
+    start = c(97, 466, 967, 2470, 3526, 4219, 4612, 6469, 6916, 7672),
+    end = c(465, 966, 2469, 3525, 4218, 4611, 6468, 6915, 7671, 10395),
+    product = c("capsid protein", "premembrane protein", "envelope protein E", 
+                "nonstructural protein 1", "nonstructural protein 2A", "nonstructural protein 2B",
+                "nonstructural protein 3", "nonstructural protein 4A", "nonstructural protein 4B", 
+                "nonstructural protein 5"),
+    strand = rep("+", 10),
     category = c(rep("structural", 3), rep("non-structural", 7)),
     stringsAsFactors = FALSE
   )
   
-  # Try to match genes with known WNV genes
-  for (i in 1:nrow(genes_data)) {
-    product <- tolower(genes_data$product[i])
-    gene <- tolower(genes_data$gene[i])
-    
-    # Check for known genes in product or gene name
-    if (grepl("capsid|core", product)) {
-      genes_data$gene[i] <- "C"
-    } else if (grepl("premembrane|pr[^a-z]?m", product) || grepl("^pr[^a-z]?m$", gene)) {
-      genes_data$gene[i] <- "prM"
-    } else if (grepl("envelope|env", product) || grepl("^env$", gene)) {
-      genes_data$gene[i] <- "Env"
-    } else if (grepl("ns1", product) || grepl("^ns1$", gene)) {
-      genes_data$gene[i] <- "NS1"
-    } else if (grepl("ns2a", product) || grepl("^ns2a$", gene)) {
-      genes_data$gene[i] <- "NS2a"
-    } else if (grepl("ns2b", product) || grepl("^ns2b$", gene)) {
-      genes_data$gene[i] <- "NS2b"
-    } else if (grepl("ns3", product) || grepl("^ns3$", gene)) {
-      genes_data$gene[i] <- "NS3"
-    } else if (grepl("ns4a", product) || grepl("^ns4a$", gene)) {
-      genes_data$gene[i] <- "NS4a"
-    } else if (grepl("ns4b", product) || grepl("^ns4b$", gene)) {
-      genes_data$gene[i] <- "NS4b"
-    } else if (grepl("ns5", product) || grepl("^ns5$", gene)) {
-      genes_data$gene[i] <- "NS5"
-    }
-  }
+  genome_length <- 11000
+  definition <- "West Nile virus, complete genome"
   
-  # Add category for each gene
-  genes_data$category <- sapply(genes_data$gene, function(g) {
-    idx <- which(gene_categories$gene == g)
-    if (length(idx) > 0) {
-      return(gene_categories$category[idx])
-    } else {
-      return("unknown")
-    }
-  })
-  
-  # Get UTR regions
+  # Calculate UTR regions
   first_cds_start <- min(genes_data$start)
   last_cds_end <- max(genes_data$end)
-  
-  # If we don't have a genome length, estimate it as 120% of the end of the last CDS
-  if (is.null(genome_length) || is.na(genome_length)) {
-    genome_length <- ceiling(last_cds_end * 1.2)
-    cat("Genome length not found, estimated as:", genome_length, "\n")
-  }
   
   utr_data <- data.frame(
     region = c("5'UTR", "3'UTR"),
@@ -516,93 +165,224 @@ ORIGIN
     stringsAsFactors = FALSE
   )
   
-  # Return the combined data
   return(list(
     genes = genes_data,
     utrs = utr_data,
     genome_length = genome_length,
-    definition = ifelse(is.null(definition), "West Nile virus, complete genome", definition)
+    definition = definition
   ))
 }
 
-# Function to filter mutations by gene selection
-filter_mutations_by_genes <- function(mutations, genome_features, gene_selection) {
-  if (gene_selection == "all") {
-    return(mutations)
-  } else if (gene_selection == "structural") {
-    structural_genes <- genome_features$genes$gene[genome_features$genes$category == "structural"]
-    return(mutations %>% filter(GENE_NAME %in% structural_genes))
-  } else if (gene_selection == "non-structural") {
-    non_structural_genes <- genome_features$genes$gene[genome_features$genes$category == "non-structural"]
-    return(mutations %>% filter(GENE_NAME %in% non_structural_genes))
-  } else {
-    # Specific gene selection (comma-separated list)
-    selected_genes <- unlist(strsplit(gene_selection, ","))
-    return(mutations %>% filter(GENE_NAME %in% selected_genes))
-  }
+# Function to format amino acid change
+format_aa_change <- function(hgvsp) {
+  # Vectorized function to handle multiple values
+  sapply(hgvsp, function(x) {
+    if (is.na(x) || x == "") return("")
+    
+    # Remove "p." prefix
+    aa_change <- gsub("^p\\.", "", x)
+  
+  # Convert three-letter to one-letter amino acids
+  aa_change <- gsub("Ala", "A", aa_change)
+  aa_change <- gsub("Arg", "R", aa_change)
+  aa_change <- gsub("Asn", "N", aa_change)
+  aa_change <- gsub("Asp", "D", aa_change)
+  aa_change <- gsub("Cys", "C", aa_change)
+  aa_change <- gsub("Gln", "Q", aa_change)
+  aa_change <- gsub("Glu", "E", aa_change)
+  aa_change <- gsub("Gly", "G", aa_change)
+  aa_change <- gsub("His", "H", aa_change)
+  aa_change <- gsub("Ile", "I", aa_change)
+  aa_change <- gsub("Leu", "L", aa_change)
+  aa_change <- gsub("Lys", "K", aa_change)
+  aa_change <- gsub("Met", "M", aa_change)
+  aa_change <- gsub("Phe", "F", aa_change)
+  aa_change <- gsub("Pro", "P", aa_change)
+  aa_change <- gsub("Ser", "S", aa_change)
+  aa_change <- gsub("Thr", "T", aa_change)
+  aa_change <- gsub("Trp", "W", aa_change)
+  aa_change <- gsub("Tyr", "Y", aa_change)
+  aa_change <- gsub("Val", "V", aa_change)
+  aa_change <- gsub("Ter", "*", aa_change)
+  
+  # Handle stop codons in format like p.Glu423*
+  # Keep asterisk as is
+  aa_change <- gsub("\\*", "*", aa_change)
+  
+  return(aa_change)
+  })
 }
 
-# Function to create genome visualization
-create_genome_visualization <- function(mutations, genome_features, cutoff, gene_selection, custom_colors = NULL, highlight_freq = 0.5) {
-  # Filter mutations by allele frequency
-  filtered_mutations <- mutations %>% filter(Allele_Frequency >= cutoff)
+# Function to create per-gene mutation tables (NON-SYNONYMOUS ONLY)
+create_gene_mutation_tables <- function(mutations, gene_colors) {
+  # Filter for non-synonymous mutations only - INCLUDING stop mutations
+  nonsyn_mutations <- mutations %>%
+    filter(
+      # Include any mutation with these effects
+      grepl("missense|nonsense|stop_gained|stop_lost", EFFECT, ignore.case = TRUE) |
+      # Include mutations with protein changes that aren't synonymous
+      (!is.na(HGVSp) & HGVSp != "" & !grepl("=$", HGVSp)) |
+      # Include mutations marked as HIGH impact
+      grepl("HIGH", PUTATIVE_IMPACT, ignore.case = TRUE)
+    ) %>%
+    # Exclude only pure synonymous variants (not stop_gained)
+    filter(!grepl("^synonymous_variant$", EFFECT, ignore.case = TRUE))
   
-  # Set default gene_selection if it's empty
-  if (is.null(gene_selection) || length(gene_selection) == 0) {
-    gene_selection <- "all"
-  }
+  # Get unique genes with mutations
+  genes_with_mutations <- unique(nonsyn_mutations$GENE_NAME)
+  genes_with_mutations <- genes_with_mutations[genes_with_mutations %in% names(gene_colors)]
   
-  # Set default highlight_freq if it's NULL or invalid
-  if (is.null(highlight_freq) || is.na(highlight_freq) || !is.numeric(highlight_freq)) {
-    highlight_freq <- 0.5
-  }
+  # Create table for each gene
+  gene_tables <- list()
   
-  # Map gene names to standard names if needed
-  for (i in 1:nrow(filtered_mutations)) {
-    # Skip NAs
-    if (is.na(filtered_mutations$GENE_NAME[i])) next
+  for (gene in genes_with_mutations) {
+    gene_muts <- nonsyn_mutations %>%
+      filter(GENE_NAME == gene) %>%
+      arrange(POS) %>%
+      mutate(
+        nt_change = paste0(POS, REF, ">", ALT),
+        aa_change = format_aa_change(HGVSp),
+        is_stop = grepl("\\*", aa_change) | grepl("stop_gained|nonsense", EFFECT, ignore.case = TRUE)
+      ) %>%
+      # Remove any remaining synonymous mutations (where AA doesn't change)
+      filter(!grepl("=$", aa_change))
     
-    # Try to match gene names based on content
-    gene_name <- filtered_mutations$GENE_NAME[i]
-    
-    if (grepl("capsid|^c$", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "C"
-    } else if (grepl("prm|prec?m|premembrane", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "prM"
-    } else if (grepl("^env$|envelope|^e$", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "Env"
-    } else if (grepl("ns1", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS1"
-    } else if (grepl("ns2a", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS2a"
-    } else if (grepl("ns2b", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS2b"
-    } else if (grepl("ns3", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS3"
-    } else if (grepl("ns4a", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS4a"
-    } else if (grepl("ns4b", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS4b"
-    } else if (grepl("ns5", gene_name, ignore.case = TRUE)) {
-      filtered_mutations$GENE_NAME[i] <- "NS5"
-    } else if (grepl("polyprotein", gene_name, ignore.case = TRUE)) {
-      # For polyprotein, try to determine the gene based on position
-      if ("POS" %in% names(filtered_mutations)) {
-        pos <- filtered_mutations$POS[i]
-        for (j in 1:nrow(genome_features$genes)) {
-          if (pos >= genome_features$genes$start[j] && 
-              pos <= genome_features$genes$end[j]) {
-            filtered_mutations$GENE_NAME[i] <- genome_features$genes$gene[j]
-            break
-          }
+    # Create formatted entries
+    table_entries <- character()
+    for (i in 1:nrow(gene_muts)) {
+      entry <- gene_muts$nt_change[i]
+      if (gene_muts$aa_change[i] != "") {
+        if (gene_muts$is_stop[i]) {
+          # Replace asterisk with TER for terminator in figure
+          aa_display <- gsub("\\*", "TER", gene_muts$aa_change[i])
+          entry <- paste0(entry, "\t", aa_display)
+        } else {
+          entry <- paste0(entry, "\t", gene_muts$aa_change[i])
         }
       }
+      table_entries <- c(table_entries, entry)
+    }
+    
+    # Only create table if there are mutations
+    if (length(table_entries) > 0) {
+      # Create data frame for table
+      table_df <- data.frame(
+        Mutations = table_entries,
+        stringsAsFactors = FALSE
+      )
+      
+      # Store with gene name as title
+      gene_tables[[gene]] <- list(
+        title = gene,
+        data = table_df,
+        color = gene_colors[gene]
+      )
     }
   }
   
-  # Filter mutations by gene selection
-  orig_count <- nrow(filtered_mutations)
+  return(gene_tables)
+}
+
+# Function to write all mutations to a separate table file
+write_mutation_table <- function(mutations, output_file, gene_selection) {
+  # Create a comprehensive mutation table
+  mutation_table <- mutations %>%
+    arrange(POS) %>%
+    mutate(
+      Nucleotide_Change = paste0(POS, REF, ">", ALT),
+      Amino_Acid_Change = format_aa_change(HGVSp),
+      Mutation_Type = case_when(
+        grepl("synonymous_variant", EFFECT, ignore.case = TRUE) & 
+          !grepl("non_synonymous", EFFECT, ignore.case = TRUE) ~ "Synonymous",
+        grepl("missense|nonsense|stop_gained", EFFECT, ignore.case = TRUE) ~ "Non-synonymous",
+        grepl("upstream|downstream|intergenic", EFFECT, ignore.case = TRUE) ~ "Non-coding",
+        TRUE ~ "Other"
+      ),
+      Frequency_Percent = round(Allele_Frequency * 100, 2)
+    ) %>%
+    select(
+      Gene = GENE_NAME,
+      Position = POS,
+      Nucleotide_Change,
+      Amino_Acid_Change,
+      Mutation_Type,
+      Frequency_Percent,
+      Effect = EFFECT
+    )
   
+  # Create output filename
+  base_name <- tools::file_path_sans_ext(output_file)
+  table_file <- paste0(base_name, "_mutations_table.tsv")
+  
+  # Write the table
+  write_tsv(mutation_table, table_file)
+  cat("Mutation table written to:", table_file, "\n")
+  
+  # Also create a summary
+  summary <- mutation_table %>%
+    group_by(Gene, Mutation_Type) %>%
+    summarise(Count = n(), .groups = 'drop') %>%
+    tidyr::pivot_wider(names_from = Mutation_Type, values_from = Count, values_fill = 0)
+  
+  summary_file <- paste0(base_name, "_mutations_summary.tsv")
+  write_tsv(summary, summary_file)
+  cat("Summary table written to:", summary_file, "\n")
+}
+
+# Function to create genome visualization with multiple tables
+create_genome_visualization <- function(mutations, genome_features, cutoff, gene_selection, custom_colors = NULL) {
+  # Filter mutations by allele frequency
+  filtered_mutations <- mutations %>% filter(Allele_Frequency >= cutoff)
+  
+  # Map gene names to standard names and handle polyprotein
+  for (i in 1:nrow(filtered_mutations)) {
+    gene_name <- tolower(filtered_mutations$GENE_NAME[i])
+    
+    if (is.na(gene_name)) {
+      filtered_mutations$GENE_NAME[i] <- "Intergenic"
+      next
+    }
+    
+    # Check if it's polyprotein and map by position
+    if (grepl("polyprotein", gene_name)) {
+      pos <- filtered_mutations$POS[i]
+      mapped <- FALSE
+      
+      # Find which gene this position falls in
+      for (j in 1:nrow(genome_features$genes)) {
+        if (pos >= genome_features$genes$start[j] && pos <= genome_features$genes$end[j]) {
+          filtered_mutations$GENE_NAME[i] <- genome_features$genes$gene[j]
+          mapped <- TRUE
+          break
+        }
+      }
+      
+      if (!mapped) {
+        # Check if in UTR regions
+        if (pos < min(genome_features$genes$start)) {
+          filtered_mutations$GENE_NAME[i] <- "5'UTR"
+        } else if (pos > max(genome_features$genes$end)) {
+          filtered_mutations$GENE_NAME[i] <- "3'UTR"
+        } else {
+          filtered_mutations$GENE_NAME[i] <- "Intergenic"
+        }
+      }
+    } else {
+      # Try to match specific gene names
+      if (grepl("capsid|^c$", gene_name)) filtered_mutations$GENE_NAME[i] <- "C"
+      else if (grepl("prm|premembrane", gene_name)) filtered_mutations$GENE_NAME[i] <- "prM"
+      else if (grepl("env|envelope", gene_name)) filtered_mutations$GENE_NAME[i] <- "Env"
+      else if (grepl("ns1", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS1"
+      else if (grepl("ns2a", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS2a"
+      else if (grepl("ns2b", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS2b"
+      else if (grepl("ns3", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS3"
+      else if (grepl("ns4a", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS4a"
+      else if (grepl("ns4b", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS4b"
+      else if (grepl("ns5", gene_name)) filtered_mutations$GENE_NAME[i] <- "NS5"
+    }
+  }
+  
+  # Filter by gene selection
   if (gene_selection != "all") {
     if (gene_selection == "structural") {
       structural_genes <- genome_features$genes$gene[genome_features$genes$category == "structural"]
@@ -611,287 +391,207 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
       non_structural_genes <- genome_features$genes$gene[genome_features$genes$category == "non-structural"]
       filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% non_structural_genes)
     } else {
-      # Specific gene selection (comma-separated list)
       selected_genes <- unlist(strsplit(gene_selection, ","))
       filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% selected_genes)
     }
   }
   
-  # Check if we have mutations after filtering
-  if (nrow(filtered_mutations) == 0) {
-    cat("No mutations met the criteria after filtering by gene and frequency.\n")
-    cat("Original mutations count: ", orig_count, "\n")
-    cat("Gene selection: ", gene_selection, "\n")
-    # Print unique gene names to help debug
-    if (orig_count > 0) {
-      cat("Available gene names in data: ", paste(unique(mutations$GENE_NAME), collapse=", "), "\n")
-    }
-  } else {
-    cat("After filtering, kept", nrow(filtered_mutations), "mutations out of", orig_count, "\n")
-  }
+  cat("Found", nrow(filtered_mutations), "mutations after filtering\n")
   
-  # Calculate structural and non-structural gene ranges
-  str_genes <- genome_features$genes %>% filter(category == "structural")
-  non_str_genes <- genome_features$genes %>% filter(category == "non-structural")
-  
-  str_range <- c(min(str_genes$start), max(str_genes$end))
-  non_str_range <- c(min(non_str_genes$start), max(non_str_genes$end))
-  
-  # Define colors for genes
+  # Define colors
   gene_names <- c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5")
   
   if (!is.null(custom_colors)) {
     color_values <- unlist(strsplit(custom_colors, ","))
     if (length(color_values) < length(gene_names)) {
-      warning("Not enough custom colors provided. Using default colors.")
       color_values <- brewer.pal(length(gene_names), "Paired")
     }
   } else {
-    color_values <- c("#4575b4", "#74add1", "#abd9e9", "#fdae61", "#f46d43", "#d73027", "#a50026", "#762a83", "#9970ab", "#c2a5cf")
+    color_values <- c("#4575b4", "#74add1", "#abd9e9", "#fdae61", "#f46d43", 
+                      "#d73027", "#a50026", "#762a83", "#9970ab", "#c2a5cf")
   }
   
   gene_colors <- setNames(color_values, gene_names)
   
-  # Prepare data for plotting - linear genome design
-  # 1. Single genome line with gene markers
+  # Create the main plot area
+  grid.newpage()
+  
+  # Define layout with reduced space for title
+  pushViewport(viewport(layout = grid.layout(
+    nrow = 3, 
+    ncol = 1,
+    heights = unit(c(0.3, 1.5, 2), "null")  # Reduced title space, more space for tables
+  )))
+  
+  # Create genome diagram in center
+  pushViewport(viewport(layout.pos.row = 2, layout.pos.col = 1))
+  
   genome_line_y <- 0.5
   
-  # 2. Genes positioned on the genome line
   genes_for_plot <- genome_features$genes %>%
     mutate(
       y = genome_line_y,
       x_center = (start + end) / 2
     )
   
-  # 3. High-level structural vs non-structural regions (as colored sections of the genome line)
-  category_regions <- data.frame(
-    category = c("Structural proteins", "Non-structural proteins"),
-    start = c(str_range[1], non_str_range[1]),
-    end = c(str_range[2], non_str_range[2]),
-    y = rep(genome_line_y, 2),
-    stringsAsFactors = FALSE
-  )
+  # Calculate structural and non-structural ranges
+  str_genes <- genome_features$genes %>% filter(category == "structural")
+  non_str_genes <- genome_features$genes %>% filter(category == "non-structural")
   
-  # 4. UTR regions
-  utrs_for_plot <- genome_features$utrs %>%
-    mutate(y = genome_line_y)
+  str_range <- c(min(str_genes$start), max(str_genes$end))
+  non_str_range <- c(min(non_str_genes$start), max(non_str_genes$end))
   
-  # 4. Mutations
-  if (nrow(filtered_mutations) > 0) {
-    # First create a simplified data frame with essential columns
-    mutations_for_plot <- data.frame(
-      POS = filtered_mutations$POS,
-      GENE_NAME = ifelse(is.na(filtered_mutations$GENE_NAME) | filtered_mutations$GENE_NAME == "", 
-                         "Intergenic", filtered_mutations$GENE_NAME),
-      Allele_Frequency = filtered_mutations$Allele_Frequency,
-      gene_color = rep("gray50", nrow(filtered_mutations)),
-      highlight = rep(FALSE, nrow(filtered_mutations)),
-      label = rep(NA, nrow(filtered_mutations)),
-      stringsAsFactors = FALSE
-    )
-    
-    # Now add colors
-    for (i in 1:nrow(mutations_for_plot)) {
-      gene <- mutations_for_plot$GENE_NAME[i]
-      if (gene %in% names(gene_colors)) {
-        mutations_for_plot$gene_color[i] <- gene_colors[gene]
-      } else {
-        mutations_for_plot$gene_color[i] <- "#999999"  # Default gray for unrecognized genes
-      }
-    }
-    
-    # Add highlight flags
-    mutations_for_plot$highlight <- mutations_for_plot$Allele_Frequency >= highlight_freq
-    
-    # Add labels
-    for (i in 1:nrow(mutations_for_plot)) {
-      # Only label highlighted mutations
-      if (!mutations_for_plot$highlight[i]) next
-      
-      if (i <= nrow(filtered_mutations) && 
-          !is.na(filtered_mutations$protein_pos[i]) && 
-          !is.na(filtered_mutations$HGVSp[i]) && 
-          filtered_mutations$HGVSp[i] != "") {
-        mutations_for_plot$label[i] <- paste0(
-          mutations_for_plot$GENE_NAME[i], ":", 
-          filtered_mutations$HGVSp[i], " (", 
-          round(mutations_for_plot$Allele_Frequency[i]*100), "%)"
-        )
-      } else {
-        mutations_for_plot$label[i] <- paste0(
-          mutations_for_plot$GENE_NAME[i], ":", 
-          mutations_for_plot$POS[i], " (", 
-          round(mutations_for_plot$Allele_Frequency[i]*100), "%)"
-        )
-      }
-    }
-  } else {
-    # Create an empty data frame for plotting
-    mutations_for_plot <- data.frame(
-      POS = numeric(0),
-      GENE_NAME = character(0),
-      Allele_Frequency = numeric(0),
-      gene_color = character(0),
-      highlight = logical(0),
-      label = character(0),
-      stringsAsFactors = FALSE
-    )
-  }
-  
-  # Create the linear genome layout plot
+  # Create the genome plot
   p_genome <- ggplot() +
     # Main genome line
     geom_segment(aes(x = 1, xend = genome_features$genome_length, 
                      y = genome_line_y, yend = genome_line_y),
                  linewidth = 3, color = "black") +
     
-    # UTR regions as thicker segments
-    geom_segment(data = utrs_for_plot,
-                 aes(x = start, xend = end, y = y, yend = y),
-                 linewidth = 6, color = "grey60") +
-    geom_text(data = utrs_for_plot, 
-              aes(x = (start + end)/2, y = y + 0.15, label = region), 
-              size = 3.5) +
+    # UTR regions
+    geom_segment(data = genome_features$utrs,
+                 aes(x = start, xend = end, y = genome_line_y, yend = genome_line_y),
+                 linewidth = 5, color = "grey60") +
+    geom_text(data = genome_features$utrs, 
+              aes(x = (start + end)/2, y = genome_line_y + 0.1, label = region), 
+              size = 3) +
     
-    # Structural and non-structural protein regions as colored thick segments
-    geom_segment(data = category_regions,
-                 aes(x = start, xend = end, y = y, yend = y, color = category),
-                 linewidth = 8, alpha = 0.7) +
-    geom_text(data = category_regions,
-              aes(x = (start + end)/2, y = y + 0.25, label = category),
-              size = 4, fontface = "bold") +
+    # Gene rectangles
+    geom_rect(data = genes_for_plot,
+              aes(xmin = start, xmax = end, 
+                  ymin = y - 0.06, ymax = y + 0.06, fill = gene),
+              color = "white", linewidth = 0.5) +
     
-    # Gene markers as vertical ticks on the genome line
-    geom_segment(data = genes_for_plot,
-                 aes(x = x_center, xend = x_center, 
-                     y = y - 0.08, yend = y + 0.08, color = gene),
-                 linewidth = 2) +
-    
-    # Gene labels
+    # Gene labels directly on genes
     geom_text(data = genes_for_plot,
-              aes(x = x_center, y = y - 0.2, label = gene, color = gene),
-              size = 3.5, fontface = "bold", angle = 45, hjust = 1) +
-              
-    # Length annotations
-    geom_text(data = data.frame(
-      x = c((str_range[1] + str_range[2])/2, (non_str_range[1] + non_str_range[2])/2),
-      y = c(genome_line_y + 0.4, genome_line_y + 0.4),
-      label = c(paste0("(", max(str_genes$end) - min(str_genes$start) + 1, "nt/", 
-                      ceiling((max(str_genes$end) - min(str_genes$start) + 1)/3), "aa)"),
-                paste0("(", max(non_str_genes$end) - min(non_str_genes$start) + 1, "nt/", 
-                      ceiling((max(non_str_genes$end) - min(non_str_genes$start) + 1)/3), "aa)")
-      )
-    ), aes(x = x, y = y, label = label), size = 3) +
-              
-    # Scale and formatting
+              aes(x = x_center, y = y, label = gene),
+              size = 4, fontface = "bold", color = "white") +
+    
+    # Structural/Non-structural labels
+    geom_segment(aes(x = str_range[1], xend = str_range[2], 
+                     y = genome_line_y - 0.15, yend = genome_line_y - 0.15),
+                 color = "#2166ac", linewidth = 3, alpha = 0.5) +
+    geom_text(aes(x = mean(str_range), y = genome_line_y - 0.22), 
+              label = "Structural proteins", size = 4, fontface = "bold", color = "#2166ac") +
+    
+    geom_segment(aes(x = non_str_range[1], xend = non_str_range[2], 
+                     y = genome_line_y - 0.15, yend = genome_line_y - 0.15),
+                 color = "#762a83", linewidth = 3, alpha = 0.5) +
+    geom_text(aes(x = mean(non_str_range), y = genome_line_y - 0.22), 
+              label = "Non-structural proteins", size = 4, fontface = "bold", color = "#762a83") +
+    
     scale_x_continuous(name = "Genome position (nt)", 
                        breaks = seq(0, ceiling(genome_features$genome_length/1000)*1000, by = 1000),
                        labels = function(x) format(x, big.mark = ",")) +
-    scale_y_continuous(name = NULL, limits = c(0, 1.2)) +
-    scale_color_manual(values = c(gene_colors, 
-                                 "Structural proteins" = "#2166ac", 
-                                 "Non-structural proteins" = "#762a83")) +
+    scale_y_continuous(name = NULL, limits = c(0.2, 0.8)) +
+    scale_fill_manual(values = gene_colors) +
     theme_minimal() +
     theme(
       axis.text.y = element_blank(),
       axis.ticks.y = element_blank(),
       panel.grid = element_blank(),
-      legend.position = "none"
+      legend.position = "none",
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12)
     )
   
-  # 2. Create mutation plot with connecting lines to genome
-  mutation_y_start <- -0.2  # Start mutations just below genome line
-  mutation_y_end <- -1.8    # End of mutation frequency bars
-  
-  p_mutations <- ggplot() +
-    # Reference genome line at the top
-    geom_segment(aes(x = 1, xend = genome_features$genome_length, 
-                     y = 0, yend = 0),
-                 linewidth = 2, color = "grey40", alpha = 0.5)
-  
-  # Only add mutation elements if there are mutations
-  if (nrow(mutations_for_plot) > 0) {
-    p_mutations <- p_mutations +
-      # Connecting lines from genome to mutations (colored by gene)
+  # Add mutations to the plot
+  if (nrow(filtered_mutations) > 0) {
+    mutations_for_plot <- filtered_mutations %>%
+      mutate(gene_color = sapply(GENE_NAME, function(g) {
+        if (g %in% names(gene_colors)) gene_colors[g] else "#999999"
+      }))
+    
+    # Add mutation markers with thinner lines
+    p_genome <- p_genome +
       geom_segment(data = mutations_for_plot,
-                  aes(x = POS, xend = POS, y = 0, yend = mutation_y_start, color = GENE_NAME),
-                  linewidth = 0.8, alpha = 0.7) +
+                   aes(x = POS, xend = POS, 
+                       y = genome_line_y - 0.08, 
+                       yend = genome_line_y - 0.12),
+                   color = mutations_for_plot$gene_color, 
+                   linewidth = 0.5, alpha = 0.8)
+  }
+  
+  print(p_genome, newpage = FALSE)
+  popViewport()
+  
+  # Add title at top
+  pushViewport(viewport(layout.pos.row = 1, layout.pos.col = 1))
+  grid.text(paste0("Mutations in ", unique(mutations$CHROM)[1], " - ", 
+                   genome_features$definition, " (cutoff: ", cutoff*100, "%)"),
+            gp = gpar(fontsize = 14, fontface = "bold"))
+  popViewport()
+  
+  # Create gene-specific mutation tables (NON-SYNONYMOUS ONLY)
+  if (nrow(filtered_mutations) > 0) {
+    gene_tables <- create_gene_mutation_tables(filtered_mutations, gene_colors)
+    
+    # Position all tables below the genome
+    pushViewport(viewport(layout.pos.row = 3, layout.pos.col = 1))
+    
+    # Get all gene tables in the correct order
+    all_gene_names <- c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5")
+    ordered_tables <- gene_tables[names(gene_tables) %in% all_gene_names]
+    ordered_tables <- ordered_tables[order(match(names(ordered_tables), all_gene_names))]
+    
+    if (length(ordered_tables) > 0) {
+      # Create layout for all gene tables
+      n_cols <- min(5, length(ordered_tables))  # Max 5 columns
+      n_rows <- ceiling(length(ordered_tables) / n_cols)
       
-      # Mutation frequency bars
-      geom_segment(data = mutations_for_plot,
-                  aes(x = POS, xend = POS, 
-                      y = mutation_y_start, 
-                      yend = mutation_y_start - (Allele_Frequency * 1.4), 
-                      color = GENE_NAME,
-                      linewidth = ifelse(highlight, 1.2, 0.8)),
-                  lineend = "round", alpha = 0.8)
-    
-    # Only add labels if there are any non-NA labels
-    if (nrow(mutations_for_plot %>% filter(!is.na(label))) > 0) {
-      p_mutations <- p_mutations +
-        # Add mutation labels
-        geom_text_repel(data = mutations_for_plot %>% filter(!is.na(label)),
-                       aes(x = POS, y = mutation_y_start - (Allele_Frequency * 1.4) - 0.1, 
-                           label = label, color = GENE_NAME),
-                       size = 2.8, box.padding = 0.3, segment.color = "grey50",
-                       min.segment.length = 0, max.overlaps = 30, direction = "y")
+      pushViewport(viewport(layout = grid.layout(
+        nrow = n_rows,
+        ncol = n_cols,
+        widths = unit(rep(1, n_cols), "null"),
+        heights = unit(rep(1, n_rows), "null")
+      )))
+      
+      for (i in 1:length(ordered_tables)) {
+        row <- ceiling(i / n_cols)
+        col <- ((i - 1) %% n_cols) + 1
+        
+        pushViewport(viewport(layout.pos.row = row, layout.pos.col = col))
+        
+        table_data <- ordered_tables[[i]]
+        
+        # Create table theme
+        # Check for TER in entries to make them bold
+        fontfaces <- rep("plain", nrow(table_data$data))
+        for (j in 1:nrow(table_data$data)) {
+          if (grepl("TER", table_data$data$Mutations[j])) {
+            fontfaces[j] <- "bold"
+          }
+        }
+        
+        table_theme <- ttheme_default(
+          base_size = 8,
+          core = list(
+            fg_params = list(parse = FALSE, fontsize = 7, fontface = fontfaces),
+            bg_params = list(fill = "white")
+          ),
+          colhead = list(
+            fg_params = list(fontface = "bold", fontsize = 8),
+            bg_params = list(fill = table_data$color, alpha = 0.7)
+          )
+        )
+        
+        # Add gene name as header
+        table_grob <- tableGrob(
+          table_data$data,
+          rows = NULL,
+          cols = table_data$title,
+          theme = table_theme
+        )
+        
+        grid.draw(table_grob)
+        popViewport()
+      }
+      popViewport()
     }
-  } else {
-    # Add a note when no mutations are found
-    p_mutations <- p_mutations +
-      annotate("text", x = genome_features$genome_length/2, y = -1, 
-               label = paste0("No mutations found with frequency ≥ ", cutoff*100, "%"), 
-               size = 4, fontface = "italic")
+    popViewport()
   }
   
-  p_mutations <- p_mutations +
-    # Add frequency scale
-    annotate("text", x = genome_features$genome_length * 0.02, y = -0.4, 
-             label = "Allele\nFrequency", size = 3, hjust = 0) +
-    annotate("text", x = genome_features$genome_length * 0.02, y = -0.9, 
-             label = "50%", size = 2.5, hjust = 0) +
-    annotate("text", x = genome_features$genome_length * 0.02, y = -1.6, 
-             label = "100%", size = 2.5, hjust = 0) +
-    geom_segment(aes(x = genome_features$genome_length * 0.01, 
-                     xend = genome_features$genome_length * 0.01,
-                     y = -0.2, yend = -1.6), 
-                 color = "grey60", linewidth = 0.5) +
-                   
-    # Set scales
-    scale_x_continuous(name = "Genome position (nt)", 
-                      breaks = seq(0, ceiling(genome_features$genome_length/1000)*1000, by = 1000),
-                      labels = function(x) format(x, big.mark = ",")) +
-    scale_y_continuous(name = NULL, limits = c(-2, 0.2)) +
-    scale_color_manual(values = gene_colors, name = "Gene") +
-    scale_linewidth_identity() +
-    
-    # Customize theme
-    theme_minimal() +
-    theme(
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      panel.grid = element_blank(),
-      legend.position = "right"
-    )
-  
-  # Combine plots - balanced layout for linear design
-  p_combined <- p_genome / p_mutations + plot_layout(heights = c(1.2, 1.8))
-  
-  # Add title with definition
-  accession <- unique(mutations$CHROM)[1]
-  definition <- genome_features$definition
-  # Truncate definition if too long (keep first 80 characters)
-  if (nchar(definition) > 80) {
-    definition <- paste0(substr(definition, 1, 77), "...")
-  }
-  
-  final_plot <- p_combined + 
-    plot_annotation(
-      title = paste0("Mutations in ", accession, " - ", definition, " (cutoff: ", cutoff*100, "%)"),
-      theme = theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
-    )
-  
-  return(final_plot)
+  popViewport()  # Main layout
 }
 
 # Main execution
@@ -903,67 +603,111 @@ main <- function() {
   # Get accession number
   if (!is.null(opt$accession)) {
     accession <- opt$accession
-    cat("Using provided accession:", accession, "\n")
   } else {
     accession <- unique(mutations$CHROM)[1]
-    cat("Using accession from CHROM column:", accession, "\n")
-    
-    # Check if it's a valid accession or needs to be replaced with a default
-    if (accession == "CHROM" || accession == "") {
-      # Not a valid accession, use a default WNV reference
-      cat("CHROM doesn't appear to be a valid accession. Using default WNV reference: AY532665.1\n")
-      accession <- "AY532665.1"  # West Nile virus reference genome for NY99
+    if (accession == "CHROM" || accession == "" || is.na(accession)) {
+      accession <- "AY532665.1"  # Default WNV reference
     }
   }
   
   # Get genome features
   genome_features <- get_genome_features(accession)
   
-  # Map gene names in mutations to known WNV genes if needed
-  # This handles cases where SnpEff uses different gene naming
-  known_genes <- genome_features$genes$gene
-  mutations$GENE_NAME_ORIG <- mutations$GENE_NAME
-  
-  for (i in 1:nrow(mutations)) {
-    gene <- mutations$GENE_NAME[i]
-    
-    # Try to match with known genes
-    if (!is.na(gene) && !(gene %in% known_genes)) {
-      # Check if it's a gene ID that needs mapping
-      for (j in 1:length(known_genes)) {
-        if (grepl(gene, genome_features$genes$product[j], ignore.case = TRUE) ||
-            grepl(gene, genome_features$genes$gene[j], ignore.case = TRUE)) {
-          mutations$GENE_NAME[i] <- known_genes[j]
-          break
-        }
-      }
-    }
-  }
-  
   # Create visualization
   cat("Creating visualization...\n")
-  plot <- create_genome_visualization(
-    mutations, 
-    genome_features, 
-    opt$cutoff,
-    opt$mutation_genes,
-    opt$colors,
-    opt$highlight_freq
-  )
   
   # Save plot
   cat("Saving plot to:", opt$output, "\n")
   output_format <- tolower(tools::file_ext(opt$output))
   
   if (output_format == "pdf") {
-    ggsave(opt$output, plot, width = opt$width, height = opt$height, device = cairo_pdf)
+    pdf(opt$output, width = opt$width, height = opt$height)
+    create_genome_visualization(
+      mutations, 
+      genome_features, 
+      opt$cutoff,
+      opt$`mutation-genes`,
+      opt$colors
+    )
+    dev.off()
   } else if (output_format %in% c("png", "jpg", "jpeg", "tiff")) {
-    ggsave(opt$output, plot, width = opt$width, height = opt$height, dpi = 300)
+    png(opt$output, width = opt$width, height = opt$height, units = "in", res = 300)
+    create_genome_visualization(
+      mutations, 
+      genome_features, 
+      opt$cutoff,
+      opt$`mutation-genes`,
+      opt$colors
+    )
+    dev.off()
   } else {
     cat("Unrecognized output format. Saving as PDF...\n")
-    ggsave(paste0(tools::file_path_sans_ext(opt$output), ".pdf"), 
-           plot, width = opt$width, height = opt$height, device = cairo_pdf)
+    pdf(paste0(tools::file_path_sans_ext(opt$output), ".pdf"), 
+        width = opt$width, height = opt$height)
+    create_genome_visualization(
+      mutations, 
+      genome_features, 
+      opt$cutoff,
+      opt$`mutation-genes`,
+      opt$colors
+    )
+    dev.off()
   }
+  
+  # Write mutation table
+  filtered_mutations <- mutations %>% filter(Allele_Frequency >= opt$cutoff)
+  
+  # Map gene names before writing table
+  for (i in 1:nrow(filtered_mutations)) {
+    gene_name <- tolower(filtered_mutations$GENE_NAME[i])
+    
+    if (is.na(gene_name)) {
+      filtered_mutations$GENE_NAME[i] <- "Intergenic"
+      next
+    }
+    
+    # Check if it's polyprotein and map by position
+    if (grepl("polyprotein", gene_name)) {
+      pos <- filtered_mutations$POS[i]
+      mapped <- FALSE
+      
+      # Find which gene this position falls in
+      for (j in 1:nrow(genome_features$genes)) {
+        if (pos >= genome_features$genes$start[j] && pos <= genome_features$genes$end[j]) {
+          filtered_mutations$GENE_NAME[i] <- genome_features$genes$gene[j]
+          mapped <- TRUE
+          break
+        }
+      }
+      
+      if (!mapped) {
+        # Check if in UTR regions
+        if (pos < min(genome_features$genes$start)) {
+          filtered_mutations$GENE_NAME[i] <- "5'UTR"
+        } else if (pos > max(genome_features$genes$end)) {
+          filtered_mutations$GENE_NAME[i] <- "3'UTR"
+        } else {
+          filtered_mutations$GENE_NAME[i] <- "Intergenic"
+        }
+      }
+    }
+  }
+  
+  # Filter by gene selection for table output
+  if (opt$`mutation-genes` != "all") {
+    if (opt$`mutation-genes` == "structural") {
+      structural_genes <- genome_features$genes$gene[genome_features$genes$category == "structural"]
+      filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% structural_genes)
+    } else if (opt$`mutation-genes` == "non-structural") {
+      non_structural_genes <- genome_features$genes$gene[genome_features$genes$category == "non-structural"]
+      filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% non_structural_genes)
+    } else {
+      selected_genes <- unlist(strsplit(opt$`mutation-genes`, ","))
+      filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% selected_genes)
+    }
+  }
+  
+  write_mutation_table(filtered_mutations, opt$output, opt$`mutation-genes`)
   
   cat("Done!\n")
 }
