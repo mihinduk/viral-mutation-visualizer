@@ -329,15 +329,142 @@ write_mutation_table <- function(mutations, output_file, gene_selection) {
   cat("Summary table written to:", summary_file, "\n")
 }
 
+# Function to create genome-only visualization (no mutations or no non-synonymous mutations)
+create_genome_only_visualization <- function(genome_features, mutations, cutoff, message) {
+  # Define colors
+  gene_names <- c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5")
+  color_values <- c("#4575b4", "#74add1", "#abd9e9", "#fdae61", "#f46d43", 
+                    "#d73027", "#a50026", "#762a83", "#9970ab", "#c2a5cf")
+  gene_colors <- setNames(color_values, gene_names)
+  
+  # Create the main plot area
+  grid.newpage()
+  
+  # Define layout with space for message
+  pushViewport(viewport(layout = grid.layout(
+    nrow = 3, 
+    ncol = 1,
+    heights = unit(c(0.3, 1.5, 0.5), "null")
+  )))
+  
+  # Add title at top
+  pushViewport(viewport(layout.pos.row = 1, layout.pos.col = 1))
+  accession <- unique(mutations$CHROM)[1]
+  grid.text(paste0("Mutations in ", accession, " - ", 
+                   genome_features$definition, " (cutoff: ", cutoff*100, "%)"),
+            gp = gpar(fontsize = 14, fontface = "bold"))
+  popViewport()
+  
+  # Create genome diagram in center
+  pushViewport(viewport(layout.pos.row = 2, layout.pos.col = 1))
+  
+  genome_line_y <- 0.5
+  
+  genes_for_plot <- genome_features$genes %>%
+    mutate(
+      y = genome_line_y,
+      x_center = (start + end) / 2
+    )
+  
+  # Calculate structural and non-structural ranges
+  str_genes <- genome_features$genes %>% filter(category == "structural")
+  non_str_genes <- genome_features$genes %>% filter(category == "non-structural")
+  
+  str_range <- c(min(str_genes$start), max(str_genes$end))
+  non_str_range <- c(min(non_str_genes$start), max(non_str_genes$end))
+  
+  # Create the genome plot
+  p_genome <- ggplot() +
+    # Main genome line
+    geom_segment(aes(x = 1, xend = genome_features$genome_length, 
+                     y = genome_line_y, yend = genome_line_y),
+                 linewidth = 3, color = "black") +
+    
+    # UTR regions
+    geom_segment(data = genome_features$utrs,
+                 aes(x = start, xend = end, y = genome_line_y, yend = genome_line_y),
+                 linewidth = 5, color = "grey60") +
+    geom_text(data = genome_features$utrs, 
+              aes(x = (start + end)/2, y = genome_line_y + 0.1, label = region), 
+              size = 3) +
+    
+    # Gene rectangles
+    geom_rect(data = genes_for_plot,
+              aes(xmin = start, xmax = end, 
+                  ymin = y - 0.06, ymax = y + 0.06, fill = gene),
+              color = "white", linewidth = 0.5) +
+    
+    # Gene labels directly on genes
+    geom_text(data = genes_for_plot,
+              aes(x = x_center, y = y, label = gene),
+              size = 4, fontface = "bold", color = "white") +
+    
+    # Structural/Non-structural labels
+    geom_segment(aes(x = str_range[1], xend = str_range[2], 
+                     y = genome_line_y - 0.15, yend = genome_line_y - 0.15),
+                 color = "#2166ac", linewidth = 3, alpha = 0.5) +
+    geom_text(aes(x = mean(str_range), y = genome_line_y - 0.22), 
+              label = "Structural proteins", size = 4, fontface = "bold", color = "#2166ac") +
+    
+    geom_segment(aes(x = non_str_range[1], xend = non_str_range[2], 
+                     y = genome_line_y - 0.15, yend = genome_line_y - 0.15),
+                 color = "#762a83", linewidth = 3, alpha = 0.5) +
+    geom_text(aes(x = mean(non_str_range), y = genome_line_y - 0.22), 
+              label = "Non-structural proteins", size = 4, fontface = "bold", color = "#762a83") +
+    
+    scale_x_continuous(name = "Genome position (nt)", 
+                       breaks = seq(0, ceiling(genome_features$genome_length/1000)*1000, by = 1000),
+                       labels = function(x) format(x, big.mark = ",")) +
+    scale_y_continuous(name = NULL, limits = c(0.2, 0.8)) +
+    scale_fill_manual(values = gene_colors) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      panel.grid = element_blank(),
+      legend.position = "none",
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 12)
+    )
+  
+  print(p_genome, newpage = FALSE)
+  popViewport()
+  
+  # Add message at bottom
+  pushViewport(viewport(layout.pos.row = 3, layout.pos.col = 1))
+  grid.text(message, gp = gpar(fontsize = 16, fontface = "italic", col = "darkred"))
+  popViewport()
+  
+  popViewport()  # Main layout
+}
+
 # Function to create genome visualization with multiple tables
 create_genome_visualization <- function(mutations, genome_features, cutoff, gene_selection, custom_colors = NULL) {
   # Filter mutations by allele frequency
   filtered_mutations <- mutations %>% filter(Allele_Frequency >= cutoff)
   
-  # Map gene names to standard names and handle polyprotein
+  # Check if we have any mutations after filtering
   if (nrow(filtered_mutations) == 0) {
-    cat("No mutations to process after filtering\n")
-    return(filtered_mutations)
+    cat("No mutations found with frequency >=", cutoff*100, "%\n")
+    # Create genome-only visualization
+    create_genome_only_visualization(genome_features, mutations, cutoff, "No mutations at this Allele Frequency")
+    return(invisible(NULL))
+  }
+  
+  # Check for non-synonymous mutations to determine what message to show
+  nonsyn_check <- filtered_mutations %>%
+    filter(
+      grepl("missense|nonsense|stop_gained|stop_lost", EFFECT, ignore.case = TRUE) |
+      (!is.na(HGVSp) & HGVSp != "" & !grepl("=$", HGVSp)) |
+      grepl("HIGH", PUTATIVE_IMPACT, ignore.case = TRUE)
+    ) %>%
+    filter(!grepl("^synonymous_variant$", EFFECT, ignore.case = TRUE))
+  
+  # If no non-synonymous mutations but we have mutations, show special message
+  if (nrow(nonsyn_check) == 0) {
+    cat("No non-synonymous mutations found with frequency >=", cutoff*100, "%\n")
+    create_genome_only_visualization(genome_features, mutations, cutoff, "No non-synonymous mutations at this Allele Frequency")
+    return(invisible(NULL))
   }
   
   for (i in 1:nrow(filtered_mutations)) {
@@ -678,14 +805,26 @@ main <- function() {
   # Write mutation table
   filtered_mutations <- mutations %>% filter(Allele_Frequency >= opt$cutoff)
   
-  # Map gene names before writing table
-  for (i in 1:nrow(filtered_mutations)) {
-    gene_name <- tolower(filtered_mutations$GENE_NAME[i])
-    
-    if (is.na(gene_name)) {
-      filtered_mutations$GENE_NAME[i] <- "Intergenic"
-      next
-    }
+  # Only process gene mapping and write table if there are mutations
+  if (nrow(filtered_mutations) > 0) {
+    # Map gene names before writing table
+    for (i in 1:nrow(filtered_mutations)) {
+      # Handle NULL, empty, or missing gene names
+      if (is.null(filtered_mutations$GENE_NAME) || 
+          length(filtered_mutations$GENE_NAME) < i ||
+          is.null(filtered_mutations$GENE_NAME[i]) || 
+          length(filtered_mutations$GENE_NAME[i]) == 0 ||
+          filtered_mutations$GENE_NAME[i] == "") {
+        filtered_mutations$GENE_NAME[i] <- "Intergenic"
+        next
+      }
+      
+      gene_name <- tolower(as.character(filtered_mutations$GENE_NAME[i]))
+      
+      if (is.na(gene_name)) {
+        filtered_mutations$GENE_NAME[i] <- "Intergenic"
+        next
+      }
     
     # Check if it's polyprotein and map by position
     if (grepl("polyprotein", gene_name)) {
@@ -711,24 +850,27 @@ main <- function() {
           filtered_mutations$GENE_NAME[i] <- "Intergenic"
         }
       }
+      }
     }
-  }
-  
-  # Filter by gene selection for table output
-  if (opt$`mutation-genes` != "all") {
-    if (opt$`mutation-genes` == "structural") {
-      structural_genes <- genome_features$genes$gene[genome_features$genes$category == "structural"]
-      filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% structural_genes)
-    } else if (opt$`mutation-genes` == "non-structural") {
-      non_structural_genes <- genome_features$genes$gene[genome_features$genes$category == "non-structural"]
-      filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% non_structural_genes)
-    } else {
-      selected_genes <- unlist(strsplit(opt$`mutation-genes`, ","))
-      filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% selected_genes)
+    
+    # Filter by gene selection for table output
+    if (opt$`mutation-genes` != "all") {
+      if (opt$`mutation-genes` == "structural") {
+        structural_genes <- genome_features$genes$gene[genome_features$genes$category == "structural"]
+        filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% structural_genes)
+      } else if (opt$`mutation-genes` == "non-structural") {
+        non_structural_genes <- genome_features$genes$gene[genome_features$genes$category == "non-structural"]
+        filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% non_structural_genes)
+      } else {
+        selected_genes <- unlist(strsplit(opt$`mutation-genes`, ","))
+        filtered_mutations <- filtered_mutations %>% filter(GENE_NAME %in% selected_genes)
+      }
     }
+    
+    write_mutation_table(filtered_mutations, opt$output, opt$`mutation-genes`)
+  } else {
+    cat("No mutations to write to table at cutoff", opt$cutoff*100, "%\n")
   }
-  
-  write_mutation_table(filtered_mutations, opt$output, opt$`mutation-genes`)
   
   cat("Done!\n")
 }
