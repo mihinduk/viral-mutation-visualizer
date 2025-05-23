@@ -335,8 +335,29 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   filtered_mutations <- mutations %>% filter(Allele_Frequency >= cutoff)
   
   # Map gene names to standard names and handle polyprotein
+  if (nrow(filtered_mutations) == 0) {
+    cat("No mutations to process after filtering\n")
+    return(filtered_mutations)
+  }
+  
   for (i in 1:nrow(filtered_mutations)) {
-    gene_name <- tolower(filtered_mutations$GENE_NAME[i])
+    # Debug: Check what we're dealing with
+    if (!("GENE_NAME" %in% names(filtered_mutations))) {
+      cat("WARNING: GENE_NAME column not found in filtered_mutations\n")
+      filtered_mutations$GENE_NAME <- NA
+    }
+    
+    # Handle NULL, empty, or missing gene names
+    if (is.null(filtered_mutations$GENE_NAME) || 
+        length(filtered_mutations$GENE_NAME) < i ||
+        is.null(filtered_mutations$GENE_NAME[i]) || 
+        length(filtered_mutations$GENE_NAME[i]) == 0 ||
+        filtered_mutations$GENE_NAME[i] == "") {
+      filtered_mutations$GENE_NAME[i] <- "Intergenic"
+      next
+    }
+    
+    gene_name <- tolower(as.character(filtered_mutations$GENE_NAME[i]))
     
     if (is.na(gene_name)) {
       filtered_mutations$GENE_NAME[i] <- "Intergenic"
