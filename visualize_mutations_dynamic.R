@@ -230,13 +230,32 @@ get_genome_features <- function(accession) {
       i <- i + 1
     }
     
-    # Process gene names for flaviviruses
+    # Process gene names based on virus type
     if (length(gene_names) > 0 || length(products) > 0) {
-      # Check if this is a flavivirus
-      is_flavivirus <- any(grepl("polyprotein", products, ignore.case = TRUE)) || 
-                      any(grepl("capsid|envelope|NS[1-5]", products, ignore.case = TRUE))
+      # Check virus type based on products
+      is_flavivirus <- any(grepl("NS[1-5]|nonstructural protein [1-5]", products, ignore.case = TRUE))
+      is_alphavirus <- any(grepl("nsp[1-4]|E[1-3]|6K", products, ignore.case = TRUE))
       
-      if (is_flavivirus && length(cds_starts) >= 10) {
+      if (is_alphavirus) {
+        # This is likely an alphavirus
+        cat("Detected alphavirus genome structure\n")
+        
+        # Clean up gene names based on products if needed
+        if (all(gene_names == "" | is.na(gene_names))) {
+          # Map products to standard gene names for alphaviruses
+          for (i in 1:length(products)) {
+            if (grepl("nsp1", products[i], ignore.case = TRUE)) gene_names[i] <- "nsp1"
+            else if (grepl("nsp2", products[i], ignore.case = TRUE)) gene_names[i] <- "nsp2"
+            else if (grepl("nsp3", products[i], ignore.case = TRUE)) gene_names[i] <- "nsp3"
+            else if (grepl("nsp4", products[i], ignore.case = TRUE)) gene_names[i] <- "nsp4"
+            else if (grepl("^C$|capsid", products[i], ignore.case = TRUE)) gene_names[i] <- "C"
+            else if (grepl("E3", products[i], ignore.case = TRUE)) gene_names[i] <- "E3"
+            else if (grepl("E2", products[i], ignore.case = TRUE)) gene_names[i] <- "E2"
+            else if (grepl("6K", products[i], ignore.case = TRUE)) gene_names[i] <- "6K"
+            else if (grepl("E1", products[i], ignore.case = TRUE)) gene_names[i] <- "E1"
+          }
+        }
+      } else if (is_flavivirus && length(cds_starts) >= 10) {
         # This is likely a flavivirus with mat_peptides
         cat("Detected flavivirus genome structure\n")
         
@@ -297,8 +316,14 @@ get_genome_features <- function(accession) {
           stringsAsFactors = FALSE
         )
         
-        # Add category for flavivirus genes
-        genes_data$category <- ifelse(genes_data$gene %in% c("C", "prM", "Env"), "structural", "non-structural")
+        # Add category based on virus type
+        if (any(genes_data$gene %in% c("nsp1", "nsp2", "nsp3", "nsp4"))) {
+          # Alphavirus categories
+          genes_data$category <- ifelse(genes_data$gene %in% c("C", "E3", "E2", "6K", "E1"), "structural", "non-structural")
+        } else {
+          # Flavivirus categories
+          genes_data$category <- ifelse(genes_data$gene %in% c("C", "prM", "Env"), "structural", "non-structural")
+        }
       } else {
         # If no valid gene names, return NULL to trigger default
         return(NULL)
@@ -624,20 +649,36 @@ create_genome_visualization <- function(mutations, genome_features, cutoff, gene
   
   cat("Found", nrow(filtered_mutations), "mutations after filtering\n")
   
-  # Define colors
-  gene_names <- c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5")
+  # Define colors based on actual genes in the genome
+  unique_genes <- unique(genome_features$genes$gene)
+  
+  # Check if this is an alphavirus or flavivirus
+  if (any(c("nsp1", "nsp2", "nsp3", "nsp4") %in% unique_genes)) {
+    # Alphavirus gene order
+    gene_names <- c("nsp1", "nsp2", "nsp3", "nsp4", "C", "E3", "E2", "6K", "E1")
+  } else {
+    # Flavivirus gene order
+    gene_names <- c("C", "prM", "Env", "NS1", "NS2a", "NS2b", "NS3", "NS4a", "NS4b", "NS5")
+  }
+  
+  # Keep only genes that exist in this genome
+  gene_names <- gene_names[gene_names %in% unique_genes]
   
   if (!is.null(custom_colors)) {
     color_values <- unlist(strsplit(custom_colors, ","))
     if (length(color_values) < length(gene_names)) {
-      color_values <- brewer.pal(length(gene_names), "Paired")
+      color_values <- brewer.pal(max(3, length(gene_names)), "Paired")
     }
   } else {
-    color_values <- c("#4575b4", "#74add1", "#abd9e9", "#fdae61", "#f46d43", 
-                      "#d73027", "#a50026", "#762a83", "#9970ab", "#c2a5cf")
+    # Use a color palette that works for any number of genes
+    if (length(gene_names) <= 12) {
+      color_values <- brewer.pal(max(3, length(gene_names)), "Paired")
+    } else {
+      color_values <- rainbow(length(gene_names))
+    }
   }
   
-  gene_colors <- setNames(color_values, gene_names)
+  gene_colors <- setNames(color_values[1:length(gene_names)], gene_names)
   
   # Create the main plot area
   grid.newpage()
