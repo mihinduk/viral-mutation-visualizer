@@ -73,6 +73,25 @@ Rscript visualize_mutations.R --input <input-file> --output <output-file> [optio
 Rscript visualize_mutations_dynamic.R --input <input-file> --output <output-file> [options]
 ```
 
+### Note on Rscript Path
+
+On some systems (especially macOS), you may need to use the full path to Rscript:
+
+```
+/usr/local/bin/Rscript visualize_mutations.R --input <input-file> --output <output-file> [options]
+```
+
+To find where Rscript is installed on your system:
+```
+which Rscript
+```
+
+Alternatively, you can make the scripts directly executable:
+```
+chmod +x visualize_mutations.R visualize_mutations_dynamic.R
+./visualize_mutations.R --input <input-file> --output <output-file> [options]
+```
+
 ### Required Arguments
 
 - `--input`: Path to the TSV file with SnpEff-annotated LoFreq output
@@ -94,7 +113,11 @@ Rscript visualize_mutations_dynamic.R --input <input-file> --output <output-file
 ### Display All Mutations Above 5% Frequency
 
 ```
+# Option 1: Using Rscript directly (may need full path on some systems)
 Rscript visualize_mutations.R --input mutations.tsv --output mutation_plot.pdf --cutoff 0.05 --mutation-genes all
+
+# Option 2: Using the executable script
+./visualize_mutations.R --input mutations.tsv --output mutation_plot.pdf --cutoff 0.05 --mutation-genes all
 ```
 
 ### Display Only Mutations in Structural Proteins Above 10% Frequency
