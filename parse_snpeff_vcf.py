@@ -112,14 +112,29 @@ def main():
                        help='Minimum allele frequency for filtered VCF output')
     parser.add_argument('-o', '--output', default=None,
                        help='Output TSV filename (default: auto-generated)')
+    parser.add_argument('-O', '--output-dir', default=None,
+                       help='Output directory (default: same as input file)')
     
     args = parser.parse_args()
     
+    # Set up paths
+    input_path = Path(args.input)
+    
+    # Determine output directory
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        output_dir = input_path.parent
+    
     # Generate output filename if not specified
     if args.output is None:
-        input_path = Path(args.input)
-        base_name = str(input_path).replace('.vcf', '').replace('.tsv', '')
-        args.output = f"{base_name}_{args.depth}.tsv"
+        base_name = input_path.stem.replace('.snpEFF.ann', '')
+        output_filename = f"{base_name}_{args.depth}.tsv"
+        args.output = str(output_dir / output_filename)
+    elif not Path(args.output).is_absolute():
+        # If output is relative, put it in the output directory
+        args.output = str(output_dir / args.output)
     
     # TSV header
     tsv_header = [
@@ -151,7 +166,7 @@ def main():
     print(f"Kept {len(records)} variants after depth filtering")
     
     # Write TSV output
-    print(f"Writing TSV output to: {args.output}")
+    print(f"Writing TSV output to: {Path(args.output).absolute()}")
     with open(args.output, 'w') as tsv_file:
         tsv_file.write('\t'.join(tsv_header) + '\n')
         for record in records:
@@ -166,7 +181,7 @@ def main():
         # Generate VCF filename
         vcf_output = args.output.replace('.tsv', f'_AF_{args.min_freq}.vcf')
         
-        print(f"Writing filtered VCF to: {vcf_output}")
+        print(f"Writing filtered VCF to: {Path(vcf_output).absolute()}")
         with open(vcf_output, 'w') as vcf_file:
             # Write header
             for header_line in header_lines:
@@ -181,7 +196,7 @@ def main():
         print(f"  - Allele frequency >= {args.min_freq}")
     
     print("\nFons vitae caritas. Love is the fountain of life.")
-    print(f"Output file: {args.output}")
+    print(f"Output file: {Path(args.output).absolute()}")
 
 if __name__ == '__main__':
     main()
