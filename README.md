@@ -171,6 +171,97 @@ The output visualization includes:
 - For large genomes, consider adjusting the plot dimensions with `--width` and `--height`
 - If mutation labels overlap too much, adjust the `max.overlaps` parameter in the script
 
+## Additional Tools
+
+### parse_snpeff_vcf.py
+
+This script filters SnpEff-annotated VCF files by depth and allele frequency, creating TSV files suitable for visualization.
+
+#### Usage
+
+```bash
+python3 parse_snpeff_vcf.py -i <input.vcf> -d <depth> [-f <frequency>] [-o <output.tsv>] [-O <output-dir>]
+```
+
+#### Arguments
+
+- `-i/--input`: Input VCF file from SnpEff annotation (required)
+- `-d/--depth`: Minimum depth requirement (required)
+- `-f/--min-freq`: Minimum allele frequency for filtered VCF output (optional)
+- `-o/--output`: Output TSV filename (default: auto-generated)
+- `-O/--output-dir`: Output directory (default: same as input file)
+
+#### Example
+
+```bash
+# Filter by depth 200 and create TSV
+python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200
+
+# Also create filtered VCF with AF >= 0.9
+python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200 -f 0.9 -O results/
+```
+
+### consensus_to_proteins.py
+
+This script extracts individual protein sequences from a consensus genome sequence using GenBank annotations.
+
+#### Installation
+
+Requires Biopython:
+```bash
+pip3 install biopython
+```
+
+#### Usage
+
+```bash
+python3 consensus_to_proteins.py -c <consensus.fa> [-g <genbank.gb> | -a <accession>] -p <prefix> [-o <output-dir>]
+```
+
+#### Arguments
+
+- `-c/--consensus`: Consensus genome FASTA file (required)
+- `-g/--genbank`: GenBank file with annotations (either this or -a required)
+- `-a/--accession`: GenBank accession number to fetch (either this or -g required)
+- `-p/--prefix`: Prefix for output protein files (required)
+- `-o/--output-dir`: Output directory for protein FASTA files (default: current directory)
+
+#### Example
+
+```bash
+# Using local GenBank file
+python3 consensus_to_proteins.py -c consensus.fa -g genes.gbk -p WNV_sample -o proteins/
+
+# Using GenBank accession
+python3 consensus_to_proteins.py -c consensus.fa -a AY532665 -p WNV_sample -o proteins/
+```
+
+For flaviviruses with polyproteins, the script automatically cleaves them into individual proteins (C, prM, E, NS1, NS2A, NS2B, NS3, NS4A, NS4B, NS5).
+
+## Complete Workflow Example
+
+1. Filter VCF by depth and frequency:
+```bash
+python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200 -f 0.9
+```
+
+2. Create consensus sequence (on server with bcftools):
+```bash
+bgzip sample_200_AF_0.9.vcf
+tabix -p vcf sample_200_AF_0.9.vcf.gz
+bcftools consensus -f reference.fa sample_200_AF_0.9.vcf.gz > consensus.fa
+```
+
+3. Extract protein sequences:
+```bash
+python3 consensus_to_proteins.py -c consensus.fa -a AY532665 -p sample -o proteins/
+```
+
+4. Visualize mutations:
+```bash
+Rscript visualize_mutations.R --input sample_200.tsv --output mutations.pdf --cutoff 0.05
+```
+
 ## Known Limitations
 
 - The tool is optimized for viral genomes, particularly flaviviruses like WNV
