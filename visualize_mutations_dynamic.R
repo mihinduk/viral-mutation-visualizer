@@ -405,35 +405,23 @@ format_aa_change <- function(hgvsp) {
     
     # Remove "p." prefix
     aa_change <- gsub("^p\\.", "", x)
-  
-  # Convert three-letter to one-letter amino acids
-  aa_change <- gsub("Ala", "A", aa_change)
-  aa_change <- gsub("Arg", "R", aa_change)
-  aa_change <- gsub("Asn", "N", aa_change)
-  aa_change <- gsub("Asp", "D", aa_change)
-  aa_change <- gsub("Cys", "C", aa_change)
-  aa_change <- gsub("Gln", "Q", aa_change)
-  aa_change <- gsub("Glu", "E", aa_change)
-  aa_change <- gsub("Gly", "G", aa_change)
-  aa_change <- gsub("His", "H", aa_change)
-  aa_change <- gsub("Ile", "I", aa_change)
-  aa_change <- gsub("Leu", "L", aa_change)
-  aa_change <- gsub("Lys", "K", aa_change)
-  aa_change <- gsub("Met", "M", aa_change)
-  aa_change <- gsub("Phe", "F", aa_change)
-  aa_change <- gsub("Pro", "P", aa_change)
-  aa_change <- gsub("Ser", "S", aa_change)
-  aa_change <- gsub("Thr", "T", aa_change)
-  aa_change <- gsub("Trp", "W", aa_change)
-  aa_change <- gsub("Tyr", "Y", aa_change)
-  aa_change <- gsub("Val", "V", aa_change)
-  aa_change <- gsub("Ter", "*", aa_change)
-  
-  # Handle stop codons in format like p.Glu423*
-  # Keep asterisk as is
-  aa_change <- gsub("\\*", "*", aa_change)
-  
-  return(aa_change)
+    
+    # Extract position number if present
+    position_match <- regexpr("\\d+", aa_change)
+    if (position_match > 0) {
+      position <- regmatches(aa_change, position_match)
+      # Get the part before and after the position
+      before_pos <- substr(aa_change, 1, position_match - 1)
+      after_pos <- substr(aa_change, position_match + attr(position_match, "match.length"), nchar(aa_change))
+      
+      # If we have amino acids before position, add space
+      if (nchar(before_pos) > 0) {
+        aa_change <- paste0(before_pos, " ", position, after_pos)
+      }
+    }
+    
+    # Keep full 3-letter codes
+    return(aa_change)
   })
 }
 
@@ -464,7 +452,7 @@ create_gene_mutation_tables <- function(mutations, gene_colors) {
       filter(GENE_NAME == gene) %>%
       arrange(POS) %>%
       mutate(
-        nt_change = paste0(POS, REF, ">", ALT),
+        nt_change = paste0(POS, " ", REF, ">", ALT),
         aa_change = format_aa_change(HGVSp),
         is_stop = grepl("\\*", aa_change) | grepl("stop_gained|nonsense", EFFECT, ignore.case = TRUE)
       ) %>%
@@ -513,7 +501,7 @@ write_mutation_table <- function(mutations, output_file, gene_selection) {
   mutation_table <- mutations %>%
     arrange(POS) %>%
     mutate(
-      Nucleotide_Change = paste0(POS, REF, ">", ALT),
+      Nucleotide_Change = paste0(POS, " ", REF, ">", ALT),
       Amino_Acid_Change = format_aa_change(HGVSp),
       Mutation_Type = case_when(
         grepl("synonymous_variant", EFFECT, ignore.case = TRUE) & 

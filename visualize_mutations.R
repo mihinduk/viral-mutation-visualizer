@@ -182,32 +182,11 @@ format_aa_change <- function(hgvsp) {
     # Remove "p." prefix
     aa_change <- gsub("^p\\.", "", x)
   
-  # Convert three-letter to one-letter amino acids
-  aa_change <- gsub("Ala", "A", aa_change)
-  aa_change <- gsub("Arg", "R", aa_change)
-  aa_change <- gsub("Asn", "N", aa_change)
-  aa_change <- gsub("Asp", "D", aa_change)
-  aa_change <- gsub("Cys", "C", aa_change)
-  aa_change <- gsub("Gln", "Q", aa_change)
-  aa_change <- gsub("Glu", "E", aa_change)
-  aa_change <- gsub("Gly", "G", aa_change)
-  aa_change <- gsub("His", "H", aa_change)
-  aa_change <- gsub("Ile", "I", aa_change)
-  aa_change <- gsub("Leu", "L", aa_change)
-  aa_change <- gsub("Lys", "K", aa_change)
-  aa_change <- gsub("Met", "M", aa_change)
-  aa_change <- gsub("Phe", "F", aa_change)
-  aa_change <- gsub("Pro", "P", aa_change)
-  aa_change <- gsub("Ser", "S", aa_change)
-  aa_change <- gsub("Thr", "T", aa_change)
-  aa_change <- gsub("Trp", "W", aa_change)
-  aa_change <- gsub("Tyr", "Y", aa_change)
-  aa_change <- gsub("Val", "V", aa_change)
-  aa_change <- gsub("Ter", "*", aa_change)
-  
-  # Handle stop codons in format like p.Glu423*
-  # Keep asterisk as is
-  aa_change <- gsub("\\*", "*", aa_change)
+  # Keep three-letter amino acid codes but add spaces
+  # This regex adds a space before any digit that follows letters
+  # and a space after any digit that precedes letters
+  aa_change <- gsub("([A-Za-z])(\\d)", "\\1 \\2", aa_change)
+  aa_change <- gsub("(\\d)([A-Za-z])", "\\1 \\2", aa_change)
   
   return(aa_change)
   })
@@ -240,7 +219,7 @@ create_gene_mutation_tables <- function(mutations, gene_colors) {
       filter(GENE_NAME == gene) %>%
       arrange(POS) %>%
       mutate(
-        nt_change = paste0(POS, REF, ">", ALT),
+        nt_change = paste0(POS, " ", REF, ">", ALT),
         aa_change = format_aa_change(HGVSp),
         is_stop = grepl("\\*", aa_change) | grepl("stop_gained|nonsense", EFFECT, ignore.case = TRUE)
       ) %>%
@@ -255,9 +234,13 @@ create_gene_mutation_tables <- function(mutations, gene_colors) {
         if (gene_muts$is_stop[i]) {
           # Replace asterisk with TER for terminator in figure
           aa_display <- gsub("\\*", "TER", gene_muts$aa_change[i])
+          # Add space between amino acid letter and position number
+          aa_display <- gsub("([A-Z])([0-9])", "\\1 \\2", aa_display)
           entry <- paste0(entry, "\t", aa_display)
         } else {
-          entry <- paste0(entry, "\t", gene_muts$aa_change[i])
+          # Add space between amino acid letter and position number
+          aa_display <- gsub("([A-Z])([0-9])", "\\1 \\2", gene_muts$aa_change[i])
+          entry <- paste0(entry, "\t", aa_display)
         }
       }
       table_entries <- c(table_entries, entry)
@@ -289,7 +272,7 @@ write_mutation_table <- function(mutations, output_file, gene_selection) {
   mutation_table <- mutations %>%
     arrange(POS) %>%
     mutate(
-      Nucleotide_Change = paste0(POS, REF, ">", ALT),
+      Nucleotide_Change = paste0(POS, " ", REF, ">", ALT),
       Amino_Acid_Change = format_aa_change(HGVSp),
       Mutation_Type = case_when(
         grepl("synonymous_variant", EFFECT, ignore.case = TRUE) & 
