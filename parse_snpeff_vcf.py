@@ -48,12 +48,19 @@ def parse_snpeff_annotation(ann_string):
         }
     return None
 
-def process_vcf_line(line, min_depth):
-    """Process a single VCF line and return parsed data if it passes depth filter"""
+def process_vcf_line(line, min_depth, min_qual=None):
+    """Process a single VCF line and return parsed data if it passes filters"""
     fields = line.strip().split('\t')
     
     # Basic VCF fields
     chrom, pos, id_field, ref, alt, qual, filter_field, info = fields[:8]
+    
+    # Parse QUAL score
+    qual_score = float(qual) if qual != '.' else 0
+    
+    # Check QUAL filter if specified
+    if min_qual is not None and qual_score < min_qual:
+        return None
     
     # Parse INFO field
     info_dict = parse_info_field(info)
@@ -95,7 +102,8 @@ def process_vcf_line(line, min_depth):
             ann_data.get('ERROR', '')
         ],
         'depth': depth,
-        'af': af
+        'af': af,
+        'qual': qual_score
     }
     
     return record
@@ -110,6 +118,8 @@ def main():
                        help='Minimum depth requirement')
     parser.add_argument('-f', '--min-freq', type=float, default=None,
                        help='Minimum allele frequency for filtered VCF output')
+    parser.add_argument('-q', '--min-qual', type=float, default=None,
+                       help='Minimum QUAL score for filtering')
     parser.add_argument('-o', '--output', default=None,
                        help='Output TSV filename (default: auto-generated)')
     parser.add_argument('-O', '--output-dir', default=None,
@@ -151,7 +161,10 @@ def main():
     records = []
     
     print(f"Reading VCF file: {args.input}")
-    print(f"Filtering by depth >= {args.depth}")
+    filter_msg = f"Filtering by depth >= {args.depth}"
+    if args.min_qual is not None:
+        filter_msg += f" and QUAL >= {args.min_qual}"
+    print(filter_msg)
     
     with open(args.input, 'r') as vcf_file:
         for line in vcf_file:
@@ -159,7 +172,7 @@ def main():
                 header_lines.append(line.strip())
                 continue
             
-            record = process_vcf_line(line, args.depth)
+            record = process_vcf_line(line, args.depth, args.min_qual)
             if record:
                 records.append(record)
     
@@ -193,6 +206,8 @@ def main():
         
         print(f"\nFiltered VCF contains only variants with:")
         print(f"  - Depth >= {args.depth}")
+        if args.min_qual is not None:
+            print(f"  - QUAL >= {args.min_qual}")
         print(f"  - Allele frequency >= {args.min_freq}")
     
     print("\nFons vitae caritas. Love is the fountain of life.")

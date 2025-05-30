@@ -180,7 +180,7 @@ This script filters SnpEff-annotated VCF files by depth and allele frequency, cr
 #### Usage
 
 ```bash
-python3 parse_snpeff_vcf.py -i <input.vcf> -d <depth> [-f <frequency>] [-o <output.tsv>] [-O <output-dir>]
+python3 parse_snpeff_vcf.py -i <input.vcf> -d <depth> [-f <frequency>] [-q <qual>] [-o <output.tsv>] [-O <output-dir>]
 ```
 
 #### Arguments
@@ -188,6 +188,7 @@ python3 parse_snpeff_vcf.py -i <input.vcf> -d <depth> [-f <frequency>] [-o <outp
 - `-i/--input`: Input VCF file from SnpEff annotation (required)
 - `-d/--depth`: Minimum depth requirement (required)
 - `-f/--min-freq`: Minimum allele frequency for filtered VCF output (optional)
+- `-q/--min-qual`: Minimum QUAL score for filtering (optional)
 - `-o/--output`: Output TSV filename (default: auto-generated)
 - `-O/--output-dir`: Output directory (default: same as input file)
 
@@ -197,8 +198,14 @@ python3 parse_snpeff_vcf.py -i <input.vcf> -d <depth> [-f <frequency>] [-o <outp
 # Filter by depth 200 and create TSV
 python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200
 
+# Filter by depth 200 and QUAL score >= 49314
+python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200 -q 49314
+
 # Also create filtered VCF with AF >= 0.9
 python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200 -f 0.9 -O results/
+
+# Combine all filters: depth, QUAL, and frequency
+python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200 -q 49314 -f 0.9
 ```
 
 ### consensus_to_proteins.py
