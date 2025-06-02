@@ -1,0 +1,14 @@
+name: viral-mutation-viz
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - bcftools=1.17
+  - samtools=1.17
+  - r-base=4.3
+  - biopython
+  - pip
+  - pip:
+    - optparse-pretty

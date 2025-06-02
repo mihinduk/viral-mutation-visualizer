@@ -178,40 +178,77 @@ def main():
     
     print(f"Kept {len(records)} variants after depth filtering")
     
+    # Function to get non-conflicting filename
+    def get_safe_filename(filepath):
+        """Add number suffix if file exists"""
+        path = Path(filepath)
+        if not path.exists():
+            return str(path)
+        
+        # File exists, add number suffix
+        base = path.stem
+        ext = path.suffix
+        parent = path.parent
+        
+        counter = 1
+        while True:
+            new_path = parent / f"{base}_{counter}{ext}"
+            if not new_path.exists():
+                return str(new_path)
+            counter += 1
+    
     # Write TSV output
-    print(f"Writing TSV output to: {Path(args.output).absolute()}")
-    with open(args.output, 'w') as tsv_file:
+    safe_tsv_path = get_safe_filename(args.output)
+    if safe_tsv_path != args.output:
+        print(f"Note: {args.output} exists, using {safe_tsv_path} instead")
+    
+    print(f"Writing TSV output to: {Path(safe_tsv_path).absolute()}")
+    with open(safe_tsv_path, 'w') as tsv_file:
         tsv_file.write('\t'.join(tsv_header) + '\n')
         for record in records:
             tsv_file.write('\t'.join(record['data']) + '\n')
     
-    # Generate filtered VCF if frequency threshold specified
+    # Always generate filtered VCF
     if args.min_freq is not None:
+        # Filter by frequency
         freq_filtered = [r for r in records if r['af'] >= args.min_freq]
         print(f"\nFiltering by allele frequency >= {args.min_freq}")
         print(f"Kept {len(freq_filtered)} variants after frequency filtering")
+        filtered_records = freq_filtered
+        vcf_suffix = f'_AF_{args.min_freq}.vcf'
+    else:
+        # No frequency filter, just depth/qual filtered
+        filtered_records = records
+        vcf_suffix = '_filtered.vcf'
+    
+    # Generate VCF filename
+    vcf_output = safe_tsv_path.replace('.tsv', vcf_suffix)
+    safe_vcf_path = get_safe_filename(vcf_output)
+    
+    if safe_vcf_path != vcf_output:
+        print(f"Note: {vcf_output} exists, using {safe_vcf_path} instead")
+    
+    print(f"Writing filtered VCF to: {Path(safe_vcf_path).absolute()}")
+    with open(safe_vcf_path, 'w') as vcf_file:
+        # Write header
+        for header_line in header_lines:
+            vcf_file.write(header_line + '\n')
         
-        # Generate VCF filename
-        vcf_output = args.output.replace('.tsv', f'_AF_{args.min_freq}.vcf')
-        
-        print(f"Writing filtered VCF to: {Path(vcf_output).absolute()}")
-        with open(vcf_output, 'w') as vcf_file:
-            # Write header
-            for header_line in header_lines:
-                vcf_file.write(header_line + '\n')
-            
-            # Write filtered variants
-            for record in freq_filtered:
-                vcf_file.write(record['line'] + '\n')
-        
-        print(f"\nFiltered VCF contains only variants with:")
-        print(f"  - Depth >= {args.depth}")
-        if args.min_qual is not None:
-            print(f"  - QUAL >= {args.min_qual}")
+        # Write filtered variants
+        for record in filtered_records:
+            vcf_file.write(record['line'] + '\n')
+    
+    print(f"\nFiltered VCF contains only variants with:")
+    print(f"  - Depth >= {args.depth}")
+    if args.min_qual is not None:
+        print(f"  - QUAL >= {args.min_qual}")
+    if args.min_freq is not None:
         print(f"  - Allele frequency >= {args.min_freq}")
     
     print("\nFons vitae caritas. Love is the fountain of life.")
-    print(f"Output file: {Path(args.output).absolute()}")
+    print(f"Output files:")
+    print(f"  TSV: {Path(safe_tsv_path).absolute()}")
+    print(f"  VCF: {Path(safe_vcf_path).absolute()}")
 
 if __name__ == '__main__':
     main()

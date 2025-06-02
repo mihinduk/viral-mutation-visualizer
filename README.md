@@ -245,6 +245,65 @@ python3 consensus_to_proteins.py -c consensus.fa -a AY532665 -p WNV_sample -o pr
 
 For flaviviruses with polyproteins, the script automatically cleaves them into individual proteins (C, prM, E, NS1, NS2A, NS2B, NS3, NS4A, NS4B, NS5).
 
+### vcf_to_consensus.py
+
+This script generates a consensus FASTA sequence from a VCF file by applying variants to a reference genome.
+
+#### Requirements
+
+Requires bcftools (includes bgzip and tabix). **Note: bcftools must be installed separately as it's not a Python package.**
+
+**Recommended: Use Conda for easy installation**
+```bash
+# Create environment from provided file
+conda env create -f environment.yml
+conda activate viral-mutation-viz
+
+# Or install just bcftools in existing environment
+conda install -c bioconda bcftools
+```
+
+**Alternative installation methods:**
+```bash
+# macOS with Homebrew
+brew install bcftools
+
+# Linux (Debian/Ubuntu)
+sudo apt-get install bcftools
+
+# Linux (RHEL/CentOS)
+sudo yum install bcftools
+```
+
+The script will check for bcftools and provide installation instructions if not found.
+
+#### Usage
+
+```bash
+python3 vcf_to_consensus.py -i <input.vcf> [-r <reference.fa> | -a <accession>] [-o <output.fa>]
+```
+
+#### Arguments
+
+- `-i/--input`: Input VCF file (required)
+- `-r/--reference`: Local reference FASTA file (either this or -a required)
+- `-a/--accession`: GenBank accession to fetch reference (either this or -r required)
+- `-o/--output`: Output consensus FASTA file (default: <input>_consensus.fa)
+- `--keep-temp`: Keep temporary compressed files
+
+#### Example
+
+```bash
+# Using local reference
+python3 vcf_to_consensus.py -i filtered.vcf -r reference.fa -o consensus.fa
+
+# Using GenBank accession
+python3 vcf_to_consensus.py -i filtered.vcf -a AY532665 -o consensus.fa
+
+# Auto-generate output filename
+python3 vcf_to_consensus.py -i sample_200_AF_0.9.vcf -a HM152775
+```
+
 ## Complete Workflow Example
 
 1. Filter VCF by depth and frequency:
@@ -252,11 +311,9 @@ For flaviviruses with polyproteins, the script automatically cleaves them into i
 python3 parse_snpeff_vcf.py -i sample.snpEFF.ann.vcf -d 200 -f 0.9
 ```
 
-2. Create consensus sequence (on server with bcftools):
+2. Create consensus sequence from filtered VCF:
 ```bash
-bgzip sample_200_AF_0.9.vcf
-tabix -p vcf sample_200_AF_0.9.vcf.gz
-bcftools consensus -f reference.fa sample_200_AF_0.9.vcf.gz > consensus.fa
+python3 vcf_to_consensus.py -i sample_200_AF_0.9.vcf -a AY532665 -o consensus.fa
 ```
 
 3. Extract protein sequences:
