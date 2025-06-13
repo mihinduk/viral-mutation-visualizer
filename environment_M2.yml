@@ -8,7 +8,9 @@ dependencies:
   - bcftools=1.22
   - samtools=1.22
   - htslib=1.22
-  - r-base=4.3
+  - pandas
+  - numpy
+  - matplotlib
   - biopython
   - pip
   - pip:

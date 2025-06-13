@@ -4,42 +4,87 @@
 # visualize_mutations_v5.R - Non-synonymous mutations only with separate output table
 # -------------------------------------------------------------------------
 
-# Function to install and load required packages
+# Function to install and load required packages with robust error handling
 install_and_load_packages <- function() {
   # Define required packages
   cran_packages <- c("optparse", "ggplot2", "dplyr", "tidyr", "readr", "stringr", 
                      "patchwork", "ggrepel", "RColorBrewer", "gridExtra", "grid")
   bioc_packages <- c("rentrez", "seqinr")
   
-  # Install missing CRAN packages
-  missing_cran <- cran_packages[!sapply(cran_packages, requireNamespace, quietly = TRUE)]
-  if (length(missing_cran) > 0) {
-    cat("Installing missing CRAN packages:", paste(missing_cran, collapse = ", "), "\n")
-    install.packages(missing_cran, repos = "https://cloud.r-project.org/", quiet = TRUE)
+  cat("Checking R package dependencies...\n")
+  
+  # Function to safely install packages with better error handling
+  safe_install <- function(packages, repo_type = "CRAN") {
+    failed_packages <- c()
+    
+    for (pkg in packages) {
+      if (!requireNamespace(pkg, quietly = TRUE)) {
+        cat(paste("Installing", pkg, "from", repo_type, "..."))
+        tryCatch({
+          if (repo_type == "CRAN") {
+            install.packages(pkg, repos = "https://cloud.r-project.org/", 
+                           dependencies = TRUE, quiet = FALSE)
+          } else if (repo_type == "Bioconductor") {
+            if (!requireNamespace("BiocManager", quietly = TRUE)) {
+              install.packages("BiocManager", repos = "https://cloud.r-project.org/")
+            }
+            BiocManager::install(pkg, quiet = FALSE)
+          }
+          cat(" ✓\n")
+        }, error = function(e) {
+          cat(" ✗\n")
+          cat(paste("   Error installing", pkg, ":", e$message, "\n"))
+          failed_packages <<- c(failed_packages, pkg)
+        })
+      }
+    }
+    return(failed_packages)
   }
   
-  # Install BiocManager if needed for Bioconductor packages
-  if (!requireNamespace("BiocManager", quietly = TRUE)) {
-    cat("Installing BiocManager...\n")
-    install.packages("BiocManager", repos = "https://cloud.r-project.org/", quiet = TRUE)
+  # Install CRAN packages
+  failed_cran <- safe_install(cran_packages, "CRAN")
+  
+  # Install Bioconductor packages
+  failed_bioc <- safe_install(bioc_packages, "Bioconductor")
+  
+  # Check for installation failures
+  all_failed <- c(failed_cran, failed_bioc)
+  if (length(all_failed) > 0) {
+    cat("\n⚠️  PACKAGE INSTALLATION FAILED ⚠️\n")
+    cat("The following packages could not be installed:\n")
+    for (pkg in all_failed) {
+      cat(paste("   -", pkg, "\n"))
+    }
+    cat("\nTo fix this, try running: Rscript fix_R_packages.R\n")
+    cat("Or contact your bioinformatics support.\n\n")
+    stop("Package installation failed. Cannot proceed.")
   }
   
-  # Install missing Bioconductor packages
-  missing_bioc <- bioc_packages[!sapply(bioc_packages, requireNamespace, quietly = TRUE)]
-  if (length(missing_bioc) > 0) {
-    cat("Installing missing Bioconductor packages:", paste(missing_bioc, collapse = ", "), "\n")
-    BiocManager::install(missing_bioc, quiet = TRUE)
-  }
-  
-  # Load all packages
+  # Load all packages with error checking
   all_packages <- c(cran_packages, bioc_packages)
+  failed_loading <- c()
+  
   suppressPackageStartupMessages({
     for (pkg in all_packages) {
-      library(pkg, character.only = TRUE)
+      tryCatch({
+        library(pkg, character.only = TRUE)
+      }, error = function(e) {
+        failed_loading <<- c(failed_loading, pkg)
+      })
     }
   })
   
-  cat("All required packages loaded successfully.\n")
+  if (length(failed_loading) > 0) {
+    cat("\n⚠️  PACKAGE LOADING FAILED ⚠️\n")
+    cat("The following packages could not be loaded:\n")
+    for (pkg in failed_loading) {
+      cat(paste("   -", pkg, "\n"))
+    }
+    cat("\nTry running: Rscript fix_R_packages.R\n\n")
+    stop("Package loading failed. Cannot proceed.")
+  }
+  
+  cat("✓ All required packages loaded successfully.\n\n")
 }
 
 # Install and load required packages
