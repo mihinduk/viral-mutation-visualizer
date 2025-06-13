@@ -8,7 +8,7 @@
 install_and_load_packages <- function() {
   # Define required packages
   cran_packages <- c("optparse", "ggplot2", "dplyr", "tidyr", "readr", "stringr", 
-                     "patchwork", "ggrepel", "RColorBrewer", "gridExtra", "grid", "cowplot")
+                     "patchwork", "ggrepel", "RColorBrewer", "gridExtra", "grid")
   bioc_packages <- c("rentrez", "seqinr")
   
   # Install missing CRAN packages
