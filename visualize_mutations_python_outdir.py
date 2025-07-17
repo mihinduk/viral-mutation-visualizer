@@ -454,25 +454,50 @@ Examples:
         print(f"\n💾 Saving figure...")
         fig.savefig(args.output, dpi=300, bbox_inches='tight', 
                    facecolor='white', edgecolor='none')
-        print(f"✅ Figure saved to: {args.output}")
+        
+        # Handle output directory  
+        if args.outdir:
+            # Create output directory if specified
+            outdir = Path(args.outdir)
+            outdir.mkdir(parents=True, exist_ok=True)
+            
+            # Use output filename but place in specified directory
+            output_filename = Path(args.output).name
+            final_output_path = outdir / output_filename
+            
+            # Table path in the same directory
+            output_base = Path(args.output).stem
+            table_path = outdir / f"{output_base}_mutations_table.tsv"
+            
+            print(f"\\n📁 Using output directory: {outdir}")
+            print(f"   Full path: {outdir.absolute()}")
+        else:
+            # Use original output path
+            final_output_path = Path(args.output)
+            output_base = final_output_path.stem
+            output_dir = final_output_path.parent
+            table_path = output_dir / f"{output_base}_mutations_table.tsv"
+        
+        # Save the figure
+        print(f"\\n💾 Saving figure...")
+        fig.savefig(final_output_path, dpi=300, bbox_inches="tight", 
+                   facecolor="white", edgecolor="none")
+        print(f"✅ Figure saved to: {final_output_path}")
         
         # Save mutations table
-        output_base = Path(args.output).stem
-        output_dir = Path(args.output).parent
-        table_path = output_dir / f"{output_base}_mutations_table.tsv"
         save_mutations_table(filtered_df, table_path, args.cutoff, accession)
         
         plt.close()
         
-        print("\n🎉 Visualization complete!")
-        print(f"   Main figure: {args.output}")
+        print("\\n🎉 Visualization complete\!")
+        print(f"   Main figure: {final_output_path}")
         print(f"   Data table: {table_path}")
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
