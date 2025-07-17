@@ -132,6 +132,10 @@ def filter_mutations(df, cutoff, effect_filter=None):
 
 def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_freq=0.5, accession=None):
     """Create the linear genome diagram with gene blocks"""
+    # Get virus-specific gene information
+    gene_coords, gene_colors, _, _ = get_gene_info(accession)
+
+    """Create the linear genome diagram with gene blocks"""
     # Get dynamic gene info for this virus
     gene_coords, gene_colors, structural_genes, nonstructural_genes = get_gene_info(accession)
     
@@ -152,7 +156,7 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
     for gene, (start, end) in GENE_COORDS.items():
         width = end - start + 1
         rect = Rectangle((start-1, gene_y), width, gene_height,
-                        facecolor=GENE_COLORS[gene], edgecolor='black', linewidth=0.5)
+                        facecolor=gene_colors.get(gene, "#808080"), edgecolor='black', linewidth=0.5)
         ax.add_patch(rect)
         
         # Add gene label
@@ -261,8 +265,10 @@ def create_mutation_tables(fig, mutations_df, start_row=0.4, gene_filter="all", 
     nonsyn_mutations['AA_Change'] = nonsyn_mutations['HGVSp'].apply(parse_amino_acid_change)
     
     # Group by gene
+    # Get dynamic gene list for this virus
+    gene_coords, gene_colors, _, _ = get_gene_info(accession)
     genes_with_mutations = []
-    for gene in GENE_COORDS.keys():
+    for gene in gene_coords.keys():
         gene_mutations = nonsyn_mutations[nonsyn_mutations['Gene'] == gene]
         if not gene_mutations.empty:
             genes_with_mutations.append((gene, gene_mutations))
@@ -318,13 +324,13 @@ def create_mutation_tables(fig, mutations_df, start_row=0.4, gene_filter="all", 
             
             # Color the header
             for i in range(2):
-                table[(0, i)].set_facecolor(GENE_COLORS[gene])
+                table[(0, i)].set_facecolor(gene_colors.get(gene, "#808080"))
                 table[(0, i)].set_text_props(weight='bold', color='white')
             
             # Add gene name above table
             fig.text(x + table_width/2, y + 0.02, gene, 
                     ha='center', va='center', fontsize=12, 
-                    fontweight='bold', color=GENE_COLORS[gene])
+                    fontweight='bold', color=gene_colors.get(gene, "#808080"))
 
 def save_mutations_table(mutations_df, output_path, cutoff, accession=None):
     """Save all mutations to a TSV file"""
