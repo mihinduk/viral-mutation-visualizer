@@ -15,7 +15,41 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import subprocess
 import warnings
-from quick_virus_fix import get_virus_name, get_gene_info
+try:
+    # Try to use the dynamic virus config framework
+    from virus_config_framework import VirusConfigManager
+    vcm = VirusConfigManager()
+    
+    def get_virus_name(accession):
+        info = vcm.get_virus_info(accession)
+        return info.get("virus_name", f"Unknown virus ({accession})")
+    
+    def get_gene_info(accession):
+        info = vcm.get_virus_info(accession)
+        return (info.get("gene_coords", {}), 
+                info.get("gene_colors", {}),
+                info.get("structural_genes", []),
+                info.get("nonstructural_genes", []))
+except ImportError:
+    # Fallback to quick fix
+    try:
+    # Try to use the dynamic virus config framework
+    from virus_config_framework import VirusConfigManager
+    vcm = VirusConfigManager()
+    
+    def get_virus_name(accession):
+        info = vcm.get_virus_info(accession)
+        return info.get("virus_name", f"Unknown virus ({accession})")
+    
+    def get_gene_info(accession):
+        info = vcm.get_virus_info(accession)
+        return (info.get("gene_coords", {}), 
+                info.get("gene_colors", {}),
+                info.get("structural_genes", []),
+                info.get("nonstructural_genes", []))
+except ImportError:
+    # Fallback to quick fix
+    from quick_virus_fix import get_virus_name, get_gene_info
 
 # Suppress matplotlib warnings
 warnings.filterwarnings('ignore', category=UserWarning)

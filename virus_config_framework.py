@@ -34,7 +34,7 @@ class VirusConfigManager:
         
         # Load individual virus configs
         for config_file in self.config_dir.glob("*.json"):
-            if config_file.name \!= "virus_families.json":
+            if config_file.name != "virus_families.json":
                 with open(config_file, 'r') as f:
                     virus_data = json.load(f)
                     for accession, data in virus_data.items():
