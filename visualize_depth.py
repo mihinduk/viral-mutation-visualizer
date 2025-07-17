@@ -187,7 +187,7 @@ def create_depth_plot(depth_df, accession, title=None, min_depth_threshold=200, 
     
     # Calculate and display statistics
     stats = calculate_coverage_stats(depth_df, min_depth_threshold)
-    stats_text = f"Mean: {stats['mean_depth']:.1f}x  < /dev/null |  "
+    stats_text = f"Mean: {stats['mean_depth']:.1f}x   |  "
     stats_text += f"Coverage ≥{min_depth_threshold}x: {stats['coverage_percent']:.1f}%"
     ax_depth.text(0.02, 0.95, stats_text, transform=ax_depth.transAxes, 
                  bbox=dict(boxstyle='round', facecolor='white', alpha=0.8),
