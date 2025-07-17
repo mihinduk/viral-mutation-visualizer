@@ -98,7 +98,7 @@ def calculate_coverage_stats(depth_df, min_depth=10):
     
     return stats
 
-def create_depth_plot(depth_df, accession, title=None, min_depth_threshold=10, log_scale=True, 
+def create_depth_plot(depth_df, accession, title=None, min_depth_threshold=200, log_scale=True, 
                      highlight_low_coverage=True, figsize=(14, 8), output_file=None):
     """Create depth visualization plot with gene annotations"""
     
@@ -130,9 +130,23 @@ def create_depth_plot(depth_df, accession, title=None, min_depth_threshold=10, l
         depths_plot = depths
         ylabel = 'Depth'
     
-    # Create the depth plot
-    ax_depth.fill_between(positions, 0, depths_plot, color='darkblue', alpha=0.7)
-    ax_depth.plot(positions, depths_plot, color='darkblue', linewidth=0.5)
+    # Create the depth plot with gene-colored regions
+    # First, fill the entire plot with a base color
+    ax_depth.fill_between(positions, 0, depths_plot, color='lightgray', alpha=0.3)
+    
+    # Then overlay gene-colored regions
+    for gene, (start, end) in gene_coords.items():
+        # Find positions within this gene
+        gene_mask = (positions >= start) & (positions <= end)
+        if np.any(gene_mask):
+            gene_positions = positions[gene_mask]
+            gene_depths = depths_plot[gene_mask]
+            color = gene_colors.get(gene, '#808080')
+            ax_depth.fill_between(gene_positions, 0, gene_depths, 
+                                color=color, alpha=0.7, label=gene)
+    
+    # Add the line plot on top
+    ax_depth.plot(positions, depths_plot, color='black', linewidth=0.5, alpha=0.8)
     
     # Add threshold line
     if log_scale:
@@ -252,7 +266,7 @@ def main():
     parser.add_argument('--outdir', help='Output directory')
     
     # Plot options
-    parser.add_argument('--min-depth', type=int, default=10,
+    parser.add_argument('--min-depth', type=int, default=200,
                        help='Minimum depth threshold (default: 10)')
     parser.add_argument('--linear-scale', action='store_true',
                        help='Use linear scale instead of log scale')
@@ -267,7 +281,7 @@ def main():
     args = parser.parse_args()
     
     # Check dependencies
-    if not check_dependencies(need_samtools=args.bam is not None):
+    if not check_dependencies():
         sys.exit(1)
     
     print("\nViral Depth Visualizer")
