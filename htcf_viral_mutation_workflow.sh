@@ -96,9 +96,43 @@ echo ""
 echo "Step 3: Generating protein sequences..."
 $MAMBA_CMD python3 "${PIPELINE_DIR}/consensus_to_proteins.py" -c "${OUTPUT_DIR}/${OUTPUT_PREFIX}_consensus.fa" -p "${OUTPUT_PREFIX}" -a "$ACCESSION" -o "${OUTPUT_DIR}"
 
-# Step 4: Visualize mutations
+# Step 4: Find BAM file for depth visualization
 echo ""
-echo "Step 4: Creating mutation visualization..."
+echo "Step 4: Finding BAM file for depth visualization..."
+# Look for BAM files in common locations
+BAM_FILE=""
+VCF_DIR=.
+PARENT_DIR=.
+
+# Common BAM file locations
+BAM_LOCATIONS=(
+    "/mapping/*.final.bam"
+    "/mapping/*.bam"
+    "/*.bam"
+    "/../mapping/*.bam"
+)
+
+for pattern in ""; do
+    if ls  2>/dev/null  < /dev/null |  head -1; then
+        BAM_FILE=2025_07_03_Download_of_Diamond_NovaSeq_N1027_shotgun_viral_genomics_processing.txt
+        break
+    fi
+done
+
+if [ -n "" ]; then
+    echo "Found BAM file: "
+    echo "Creating depth visualization..."
+    
+    # Generate depth visualization
+     python3 "/visualize_depth.py"         --bam ""         --accession ""         --output "_depth_coverage.png"         --outdir ""
+else
+    echo "Warning: No BAM file found for depth visualization"
+    echo "Looked in: "
+fi
+
+# Step 5: Visualize mutations
+echo ""
+echo "Step 5: Creating mutation visualization..."
 # Find the actual TSV file created by parse_snpeff_vcf.py
 TSV_FILE=$(find "$OUTPUT_DIR" -name "*_mutations*.tsv" 2>/dev/null | tail -1)
 if [ -z "$TSV_FILE" ]; then
