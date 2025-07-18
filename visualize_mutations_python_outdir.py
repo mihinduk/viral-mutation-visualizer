@@ -100,38 +100,7 @@ def check_dependencies():
     
     return True
 
-# Gene coordinates for West Nile virus (1-based)
-GENE_COORDS = {
-    'C': (97, 465),
-    'prM': (466, 966), 
-    'Env': (967, 2469),
-    'NS1': (2470, 3525),
-    'NS2a': (3526, 4218),
-    'NS2b': (4219, 4611),
-    'NS3': (4612, 6468),
-    'NS4a': (6469, 6915),
-    'NS4b': (6916, 7671),
-    'NS5': (7672, 10395)
-}
-
 # Colors matching the R version exactly
-GENE_COLORS = {
-    'C': '#4575b4',
-    'prM': '#74add1', 
-    'Env': '#abd9e9',
-    'NS1': '#fdae61',
-    'NS2a': '#f46d43',
-    'NS2b': '#d73027',
-    'NS3': '#a50026',
-    'NS4a': '#762a83',
-    'NS4b': '#9970ab',
-    'NS5': '#c2a5cf'
-}
-
-# Structural vs non-structural genes
-structural_genes = ['C', 'prM', 'Env']
-NONstructural_genes = ['NS1', 'NS2a', 'NS2b', 'NS3', 'NS4a', 'NS4b', 'NS5']
-
 # Genome length for West Nile virus
 GENOME_LENGTH = 11029
 
@@ -362,7 +331,7 @@ def filter_genes_for_display(mutations_df, gene_filter):
     elif gene_filter == 'non-structural':
         # Filter for non-structural genes  
         mutations_df['Gene'] = mutations_df['POS'].apply(lambda pos: map_position_to_gene(pos, accession))
-        return mutations_df[mutations_df['Gene'].isin(NONstructural_genes)]
+        return mutations_df[mutations_df['Gene'].isin(nonstructural_genes)]
     else:
         # Comma-separated gene list
         selected_genes = [g.strip() for g in gene_filter.split(',')]
