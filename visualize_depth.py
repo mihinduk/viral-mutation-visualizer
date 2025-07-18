@@ -27,7 +27,7 @@ try:
     def get_gene_info(accession):
         info = vcm.get_virus_info(accession)
         return (info.get("gene_coords", {}), 
-                info.get("gene_colors", {}),
+                info.get("colors", {}),
                 info.get("structural_genes", []),
                 info.get("nonstructural_genes", []))
 except ImportError:
