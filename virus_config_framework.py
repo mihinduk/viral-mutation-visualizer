@@ -41,21 +41,39 @@ class VirusConfigManager:
                         self.virus_cache[accession] = data
     
     def get_virus_info(self, accession):
-        """Get virus information with auto-discovery"""
+        """Get virus info for accession"""
         # Check cache first
         if accession in self.virus_cache:
             return self.virus_cache[accession]
         
-        # Try to auto-discover from GenBank
-        print(f"Auto-discovering virus info for {accession}...")
-        virus_info = self.discover_virus_from_genbank(accession)
+        # Try to load from known viruses file first
+        known_viruses_file = self.config_dir / 'known_viruses.json'
+        if known_viruses_file.exists():
+            try:
+                with open(known_viruses_file, 'r') as f:
+                    known_viruses = json.load(f)
+                    if accession in known_viruses:
+                        virus_info = known_viruses[accession]
+                        # Add family styling if not present
+                        if 'colors' not in virus_info or not virus_info['colors']:
+                            family = virus_info.get('family', 'unknown')
+                            styling = self.get_family_styling(family)
+                            virus_info['colors'] = styling['colors']
+                            virus_info['structural_genes'] = styling['structural_genes']
+                            virus_info['nonstructural_genes'] = styling['nonstructural_genes']
+                        
+                        self.virus_cache[accession] = virus_info
+                        print(f"✅ Loaded {accession} from known viruses database")
+                        return virus_info
+            except Exception as e:
+                print(f"⚠️ Error loading known viruses: {e}")
         
-        if virus_info:
-            # Save for future use
-            self.save_virus_config(accession, virus_info)
-            return virus_info
+        # Try auto-discovery
+        auto_info = self.discover_virus_from_genbank(accession)
+        if auto_info:
+            self.save_virus_config(accession, auto_info)
+            return auto_info
         
-        # Fallback
         return self.get_fallback_info(accession)
     
     def discover_virus_from_genbank(self, accession):

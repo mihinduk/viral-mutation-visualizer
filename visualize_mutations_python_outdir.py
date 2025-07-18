@@ -11,23 +11,43 @@ import argparse
 try:
     from virus_config_framework import VirusConfigManager
     vcm = VirusConfigManager()
+    # Test if it can actually load data properly
+    test_info = vcm.get_virus_info('NC_075022.1')
+    if not test_info.get('colors') or len(test_info.get('gene_coords', {})) < 5:
+        # Framework is not working properly, fall back to simple manager
+        raise ImportError('Framework not loading proper data')
     
     def get_virus_name(accession):
         info = vcm.get_virus_info(accession)
-        return info.get("virus_name", f"Unknown virus ({accession})")
+        return info.get("name", f"Unknown virus ({accession})")
     
     def get_gene_info(accession):
         info = vcm.get_virus_info(accession)
         return (info.get("gene_coords", {}), 
-                info.get("gene_colors", {}),
+                info.get("colors", {}),
                 info.get("structural_genes", []),
                 info.get("nonstructural_genes", []))
     
     print("Using dynamic virus configuration framework")
 except ImportError:
-    # Fallback to quick fix
-    from quick_virus_fix import get_virus_name, get_gene_info
-    print("Using quick fix virus configuration")
+    try:
+        from virus_config_simple import simple_virus_manager
+        
+        def get_virus_name(accession):
+            info = simple_virus_manager.get_virus_info(accession)
+            return info.get("name", f"Unknown virus ({accession})")
+        
+        def get_gene_info(accession):
+            info = simple_virus_manager.get_virus_info(accession)
+            return (info.get("gene_coords", {}), 
+                    info.get("colors", {}),
+                    info.get("structural_genes", []),
+                    info.get("nonstructural_genes", []))
+        
+        print("Using simple virus configuration manager")
+    except ImportError:
+        from quick_virus_fix import get_virus_name, get_gene_info
+        print("Using quick fix virus configuration")
 
 import sys
 import os
@@ -158,7 +178,67 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
 
     """Create the linear genome diagram with gene blocks"""
     # Get dynamic gene info for this virus
-    gene_coords, gene_colors, structural_genes, nonstructural_genes = get_gene_info(accession)
+    gene_coords, gene_colors, structural_genes, nonstructural_genes = get_gene_info(accession)    
+    # If we only have Polyprotein, use hardcoded coordinates for known viruses
+    if len(gene_coords) == 1 and 'Polyprotein' in gene_coords:
+        if accession == 'HM440560.1' or accession == 'HM440560':
+            # Hardcoded Powassan virus gene coordinates
+            gene_coords = {
+                'C': [110, 357],
+                'prM': [358, 858],
+                'Env': [859, 2361],
+                'NS1': [2362, 3417],
+                'NS2a': [3418, 4110],
+                'NS2b': [4111, 4503],
+                'NS3': [4504, 6360],
+                'NS4a': [6361, 6807],
+                'NS4b': [6808, 7563],
+                'NS5': [7564, 10287]
+            }
+            # Use standard flavivirus colors
+            gene_colors = {
+                'C': '#4575b4',
+                'prM': '#74add1',
+                'Env': '#abd9e9',
+                'NS1': '#fee090',
+                'NS2a': '#fdae61',
+                'NS2b': '#f46d43',
+                'NS3': '#d73027',
+                'NS4a': '#a50026',
+                'NS4b': '#762a83',
+                'NS5': '#5aae61'
+            }
+            structural_genes = ['C', 'prM', 'Env']
+            nonstructural_genes = ['NS1', 'NS2a', 'NS2b', 'NS3', 'NS4a', 'NS4b', 'NS5']
+            print('Using hardcoded Powassan virus gene coordinates')
+
+        elif accession == 'NC_075022.1':
+            # Hardcoded VEEV (alphavirus) gene coordinates
+            gene_coords = {
+                'nsP1': [84, 1685],
+                'nsP2': [1686, 4226],
+                'nsP3': [4227, 5945],
+                'nsP4': [5946, 7664],
+                'C': [7667, 7900],
+                'E3': [7901, 8059],
+                'E2': [8060, 9394],
+                'E1': [9395, 11023]
+            }
+            # Alphavirus-specific colors
+            gene_colors = {
+                'nsP1': '#d62728',    # Red
+                'nsP2': '#ff7f0e',    # Orange  
+                'nsP3': '#2ca02c',    # Green
+                'nsP4': '#1f77b4',    # Blue
+                'C': '#9467bd',       # Purple
+                'E3': '#8c564b',      # Brown
+                'E2': '#e377c2',      # Pink
+                'E1': '#7f7f7f'       # Gray
+            }
+            structural_genes = ['C', 'E3', 'E2', 'E1']
+            nonstructural_genes = ['nsP1', 'nsP2', 'nsP3', 'nsP4']
+            print('Using hardcoded VEEV gene coordinates')
+    
     
     # Set up the plot
     ax.set_xlim(0, GENOME_LENGTH)
@@ -169,12 +249,15 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
     gene_y = 0.35
     
     # Draw 5' UTR
-    utr5_rect = Rectangle((0, gene_y), GENE_COORDS['C'][0]-1, gene_height, 
+    # Find first gene start
+    first_gene_start = min(coord[0] for coord in gene_coords.values()) if gene_coords else 1
+    if first_gene_start > 1:
+        utr5_rect = Rectangle((0, gene_y), first_gene_start-1, gene_height, 
                          facecolor='lightgray', edgecolor='black', linewidth=0.5)
-    ax.add_patch(utr5_rect)
+        ax.add_patch(utr5_rect)
     
     # Draw genes
-    for gene, (start, end) in GENE_COORDS.items():
+    for gene, (start, end) in gene_coords.items():
         width = end - start + 1
         rect = Rectangle((start-1, gene_y), width, gene_height,
                         facecolor=gene_colors.get(gene, "#808080"), edgecolor='black', linewidth=0.5)
@@ -186,18 +269,33 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
                ha='center', va='center', fontsize=9, fontweight='bold')
     
     # Draw 3' UTR
-    utr3_start = GENE_COORDS['NS5'][1]
-    utr3_rect = Rectangle((utr3_start, gene_y), GENOME_LENGTH - utr3_start, gene_height,
-                         facecolor='lightgray', edgecolor='black', linewidth=0.5)
-    ax.add_patch(utr3_rect)
+    # Find last gene end
+    last_gene_end = max(coord[1] for coord in gene_coords.values()) if gene_coords else GENOME_LENGTH
+    utr3_start = last_gene_end
+    if utr3_start < GENOME_LENGTH:
+        utr3_rect = Rectangle((utr3_start, gene_y), GENOME_LENGTH - utr3_start, gene_height,
+                             facecolor='lightgray', edgecolor='black', linewidth=0.5)
+        ax.add_patch(utr3_rect)
     
     # Add structural/non-structural labels
-    struct_start = GENE_COORDS['C'][0] - 1
-    struct_end = GENE_COORDS['Env'][1] - 1
+    # Find structural gene boundaries
+    struct_coords = [(start, end) for gene, (start, end) in gene_coords.items() if gene in structural_genes]
+    if struct_coords:
+        struct_start = min(coord[0] for coord in struct_coords) - 1
+        struct_end = max(coord[1] for coord in struct_coords) - 1
+    else:
+        struct_start = 0
+        struct_end = 0
     struct_center = (struct_start + struct_end) / 2
     
-    nonstruct_start = GENE_COORDS['NS1'][0] - 1
-    nonstruct_end = GENE_COORDS['NS5'][1] - 1  
+    # Find non-structural gene boundaries
+    nonstruct_coords = [(start, end) for gene, (start, end) in gene_coords.items() if gene in nonstructural_genes]
+    if nonstruct_coords:
+        nonstruct_start = min(coord[0] for coord in nonstruct_coords) - 1
+        nonstruct_end = max(coord[1] for coord in nonstruct_coords) - 1
+    else:
+        nonstruct_start = 0
+        nonstruct_end = 0  
     nonstruct_center = (nonstruct_start + nonstruct_end) / 2
     
     # Structural proteins label and underline
@@ -219,7 +317,16 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
             pos = mutation['POS']
             gene = map_position_to_gene(pos, accession)
             if gene:
-                color = gene_colors.get(gene, "#cccccc")
+                # Determine color based on mutation type
+                mutation_type = mutation.get("EFFECT", "")
+                if "synonymous_variant" in mutation_type:
+                    color = "#2ca02c"  # Green for synonymous
+                elif "missense_variant" in mutation_type:
+                    color = "#ff7f0e"  # Orange for missense
+                elif "stop_gained" in mutation_type or "nonsense" in mutation_type:
+                    color = "#d62728"  # Red for stop/nonsense
+                else:
+                    color = gene_colors.get(gene, "#1f77b4")  # Blue default
                 # Highlight high-frequency mutations with thicker lines
                 freq = mutation.get('Allele_Frequency', 0)
                 if freq >= highlight_freq:

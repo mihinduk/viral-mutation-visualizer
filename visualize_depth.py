@@ -22,24 +22,7 @@ try:
     
     def get_virus_name(accession):
         info = vcm.get_virus_info(accession)
-        return info.get("virus_name", f"Unknown virus ({accession})")
-    
-    def get_gene_info(accession):
-        info = vcm.get_virus_info(accession)
-        return (info.get("gene_coords", {}), 
-                info.get("gene_colors", {}),
-                info.get("structural_genes", []),
-                info.get("nonstructural_genes", []))
-except ImportError:
-    # Fallback to quick fix
-    try:
-    # Try to use the dynamic virus config framework
-    from virus_config_framework import VirusConfigManager
-    vcm = VirusConfigManager()
-    
-    def get_virus_name(accession):
-        info = vcm.get_virus_info(accession)
-        return info.get("virus_name", f"Unknown virus ({accession})")
+        return info.get("name", f"Unknown virus ({accession})")
     
     def get_gene_info(accession):
         info = vcm.get_virus_info(accession)
@@ -53,6 +36,14 @@ except ImportError:
 
 # Suppress matplotlib warnings
 warnings.filterwarnings('ignore', category=UserWarning)
+# Load known virus configurations
+import json
+try:
+    with open('virus_configs/known_viruses.json', 'r') as f:
+        KNOWN_VIRUSES = json.load(f)
+except:
+    KNOWN_VIRUSES = {}
+
 
 def check_dependencies():
     """Check if all required tools and packages are available"""
