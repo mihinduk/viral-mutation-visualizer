@@ -488,6 +488,65 @@ def save_mutations_table(mutations_df, output_path, cutoff, accession=None):
     output_df.to_csv(output_path, sep='\t', index=False)
     print(f"✅ Mutations table saved to: {output_path}")
 
+
+def generate_html_report(mutations_df, image_path, html_path, accession, cutoff):
+    """Generate HTML report with embedded image and mutation data"""
+    import os
+    
+    # Get virus info for the report
+    virus_name = get_virus_name(accession)
+    
+    # Count mutations
+    total_mutations = len(mutations_df)
+    
+    # Create HTML content
+    html_content = f"""<\!DOCTYPE html>
+<html>
+<head>
+    <title>Viral Mutation Report - {virus_name}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+        .image-container {{ text-align: center; margin: 20px 0; }}
+        .image-container img {{ max-width: 100%; height: auto; border: 1px solid #ddd; }}
+        .stats {{ display: flex; justify-content: space-around; margin: 20px 0; }}
+        .stat-box {{ background-color: #e9ecef; padding: 15px; border-radius: 5px; text-align: center; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Viral Mutation Analysis Report</h1>
+        <h2>{virus_name} ({accession})</h2>
+        <p>Generated on: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-box">
+            <h3>Total Mutations</h3>
+            <p style="font-size: 24px; font-weight: bold;">{total_mutations}</p>
+        </div>
+        <div class="stat-box">
+            <h3>Cutoff Threshold</h3>
+            <p style="font-size: 24px; font-weight: bold;">{cutoff*100:.1f}%</p>
+        </div>
+    </div>
+    
+    <div class="image-container">
+        <h3>Genome Visualization</h3>
+        <img src="{os.path.basename(image_path)}" alt="Viral mutation visualization">
+    </div>
+    
+    <div style="margin-top: 40px; font-size: 12px; color: #666;">
+        <p>Generated with Viral Mutation Visualizer  < /dev/null |  Family-based configuration system</p>
+    </div>
+</body>
+</html>"""
+    
+    # Write HTML file
+    with open(html_path, 'w') as f:
+        f.write(html_content)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Visualize viral genome mutations (Python version)',
