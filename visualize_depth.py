@@ -272,6 +272,71 @@ def save_html_plot(fig, output_file):
         print("⚠️  mpld3 not installed. Install with: pip install mpld3")
         return False
 
+
+def generate_depth_html_report(depth_stats, image_path, html_path, accession):
+    """Generate HTML report for depth visualization"""
+    import os
+    
+    # Get virus info
+    virus_name = get_virus_name(accession)
+    
+    # Create HTML content
+    html_content = f"""<\!DOCTYPE html>
+<html>
+<head>
+    <title>Depth Coverage Report - {virus_name}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+        .image-container {{ text-align: center; margin: 20px 0; }}
+        .image-container img {{ max-width: 100%; height: auto; border: 1px solid #ddd; }}
+        .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }}
+        .stat-box {{ background-color: #e9ecef; padding: 15px; border-radius: 5px; text-align: center; }}
+        .stat-value {{ font-size: 24px; font-weight: bold; color: #2c3e50; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Read Depth Coverage Report</h1>
+        <h2>{virus_name} ({accession})</h2>
+        <p>Generated on: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-box">
+            <h3>Mean Depth</h3>
+            <p class="stat-value">{depth_stats.get('mean', 0):.1f}x</p>
+        </div>
+        <div class="stat-box">
+            <h3>Median Depth</h3>
+            <p class="stat-value">{depth_stats.get('median', 0):.1f}x</p>
+        </div>
+        <div class="stat-box">
+            <h3>Coverage ≥200x</h3>
+            <p class="stat-value">{depth_stats.get('coverage_pct', 0):.1f}%</p>
+        </div>
+        <div class="stat-box">
+            <h3>Max Depth</h3>
+            <p class="stat-value">{depth_stats.get('max', 0):,}x</p>
+        </div>
+    </div>
+    
+    <div class="image-container">
+        <h3>Depth Coverage Visualization</h3>
+        <img src="{os.path.basename(image_path)}" alt="Depth coverage visualization">
+    </div>
+    
+    <div style="margin-top: 40px; font-size: 12px; color: #666;">
+        <p>Generated with Viral Depth Visualizer  < /dev/null |  Family-based configuration system</p>
+    </div>
+</body>
+</html>"""
+    
+    # Write HTML file
+    with open(html_path, 'w') as f:
+        f.write(html_content)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Visualize read depth across viral genomes')
     
