@@ -211,7 +211,8 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
     
     # Set up the plot
     ax.set_xlim(0, GENOME_LENGTH)
-    ax.set_ylim(-0.8, 1.2)
+    # Tighter spacing - bring position line closer to genome for better space utilization
+    ax.set_ylim(-0.35, 1.0)
     
     # Draw gene blocks
     gene_height = 0.3
@@ -305,6 +306,15 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
                     linewidth = 1.5
                     alpha = 0.8
                 ax.plot([pos, pos], [0.25, 0.35], color=color, linewidth=linewidth, alpha=alpha)
+    
+    # Add legend for mutation colors
+    legend_elements = [
+        plt.Line2D([0], [0], color='#2ca02c', linewidth=2, label='Synonymous'),
+        plt.Line2D([0], [0], color='#ff7f0e', linewidth=2, label='Missense'),
+        plt.Line2D([0], [0], color='#d62728', linewidth=2, label='Nonsense/Stop')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', frameon=True, 
+              fancybox=True, shadow=True, fontsize=10)
     
     # Format x-axis
     ax.set_xlabel('Genome Position', fontsize=12, fontweight='bold')
