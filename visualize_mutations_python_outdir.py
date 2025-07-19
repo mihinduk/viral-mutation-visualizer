@@ -316,10 +316,12 @@ def create_genome_diagram(ax, mutations_df, title, gene_filter="all", highlight_
     ax.legend(handles=legend_elements, loc='upper right', frameon=True, 
               fancybox=True, shadow=True, fontsize=10)
     
-    # Format x-axis
+    # Format x-axis - move up to create more space for mutation tables
     ax.set_xlabel('Genome Position', fontsize=12, fontweight='bold')
     ax.set_xticks(np.arange(0, GENOME_LENGTH+1, 1000))
     ax.set_xticklabels([f'{x:,}' for x in np.arange(0, GENOME_LENGTH+1, 1000)])
+    # Move x-axis labels up
+    ax.xaxis.set_label_coords(0.5, -0.08)
     
     # Remove y-axis
     ax.set_yticks([])
@@ -348,40 +350,40 @@ def filter_genes_for_display(mutations_df, gene_filter):
         mutations_df['Gene'] = mutations_df['POS'].apply(lambda pos: map_position_to_gene(pos, accession))
         return mutations_df[mutations_df['Gene'].isin(selected_genes)]
 
-def create_mutation_tables(fig, mutations_df, start_row=0.4, gene_filter="all", accession=None):
-    """Create tables showing non-synonymous mutations for each gene"""
+def create_mutation_tables(fig, mutations_df, start_row=0.3, gene_filter="all", accession=None):
+    """Create tables showing ALL mutations for each gene with complete parity"""
     
-    # Filter for non-synonymous mutations only
-    nonsyn_effects = ['missense_variant', 'nonsense_variant', 'stop_gained', 'stop_lost']
-    nonsyn_mutations = mutations_df[mutations_df['EFFECT'].isin(nonsyn_effects)].copy()
+    # Show ALL mutations (synonymous + non-synonymous) for complete parity with lines
+    # Include all mutation types to match the vertical lines displayed
+    all_mutations = mutations_df.copy()
     
     # Apply gene filtering
-    nonsyn_mutations = filter_genes_for_display(nonsyn_mutations, gene_filter)
+    all_mutations = filter_genes_for_display(all_mutations, gene_filter)
     
-    if nonsyn_mutations.empty:
-        # Add text saying no non-synonymous mutations found
-        fig.text(0.5, 0.3, 'No non-synonymous mutations found above the specified cutoff',
+    if all_mutations.empty:
+        # Add text saying no mutations found
+        fig.text(0.5, 0.25, 'No mutations found above the specified cutoff',
                 ha='center', va='center', fontsize=14, style='italic')
         return
     
     # Add gene column based on position
-    nonsyn_mutations['Gene'] = nonsyn_mutations['POS'].apply(lambda pos: map_position_to_gene(pos, accession))
-    nonsyn_mutations = nonsyn_mutations.dropna(subset=['Gene'])
+    all_mutations['Gene'] = all_mutations['POS'].apply(lambda pos: map_position_to_gene(pos, accession))
+    all_mutations = all_mutations.dropna(subset=['Gene'])
     
     # Parse amino acid changes
-    nonsyn_mutations['AA_Change'] = nonsyn_mutations['HGVSp'].apply(parse_amino_acid_change)
+    all_mutations['AA_Change'] = all_mutations['HGVSp'].apply(parse_amino_acid_change)
     
     # Group by gene
     # Get dynamic gene list for this virus
     gene_coords, gene_colors, _, _ = get_gene_info(accession)
     genes_with_mutations = []
     for gene in gene_coords.keys():
-        gene_mutations = nonsyn_mutations[nonsyn_mutations['Gene'] == gene]
+        gene_mutations = all_mutations[all_mutations['Gene'] == gene]
         if not gene_mutations.empty:
             genes_with_mutations.append((gene, gene_mutations))
     
     if not genes_with_mutations:
-        fig.text(0.5, 0.3, 'No non-synonymous mutations found above the specified cutoff',
+        fig.text(0.5, 0.25, 'No mutations found above the specified cutoff',
                 ha='center', va='center', fontsize=14, style='italic')
         return
     
